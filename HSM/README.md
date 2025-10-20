@@ -1,36 +1,34 @@
+
 # Software HSM Implementation
 
-This project is a C++ implementation of a software Hardware Security Module (HSM) based on a provided design blueprint. It uses the OpenSSL library for all cryptographic operations and demonstrates key management principles like secure storage, access control, and envelope encryption.
+This project is a C++ implementation of a software Hardware Security Module (HSM). It runs as a **secure SSL/TLS server** that accepts JSON-based requests to perform cryptographic operations. It uses the OpenSSL library and demonstrates key management principles like secure storage, access control, and envelope encryption.
 
 ## Features
 
+-   **Auto-Generated Certificates**: Automatically creates a self-signed SSL certificate and private key on first launch.
+-   **Secure API Server**: Runs as a daemon, communicating over a TLS-encrypted socket.
+-   **JSON-RPC Style**: Accepts and returns easy-to-parse JSON messages.
 -   **Key Storage Vault**: Securely stores keys encrypted at rest using a master key derived from a password.
 -   **Cryptographic Engine**: Performs AES-256-GCM encryption/decryption.
 -   **Access Control**: Role-based access control managed via a `policies.json` file.
 -   **Key Lifecycle Management**: Supports key creation and rotation.
 -   **Envelope Encryption**: Implements the envelope encryption pattern for securing data.
--   **Command-Line Interface**: All operations are exposed through a simple CLI.
 
 ## Prerequisites
 
 1.  **C++ Compiler**: A modern C++ compiler (supporting C++17).
 2.  **CMake**: Version 3.10 or higher.
-3.  **OpenSSL**: The development libraries for OpenSSL (e.g., `libssl-dev` on Debian/Ubuntu).
+3.  **OpenSSL**: The development libraries (e.g., `libssl-dev` on Debian/Ubuntu).
 4.  **nlohmann/json**: A header-only JSON library for C++.
 
 ## 🛠️ Setup and Build Instructions
 
 ### 1. Initial Setup
 
-Clone or download the project and navigate into the directory.
-
-Create the required directories and files:
+Clone or download the project and navigate into the directory. Create the required directories and files:
 
 ```bash
-# Create the directory to store encrypted keys
 mkdir vault
-
-# Create the directory for third-party includes
 mkdir include
 ```
 
@@ -47,12 +45,10 @@ wget [https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp](https
 Create a file named `policies.json` in the project root. This file defines which "principals" (users/roles) can perform which actions.
 
 **`policies.json` example:**
-
 ```json
 {
     "admin": [
-        "CREATE_KEY",
-        "ROTATE_KEY"
+        "CREATE_KEY"
     ],
     "app_user": [
         "ENCRYPT",
@@ -66,70 +62,81 @@ Create a file named `policies.json` in the project root. This file defines which
 Use CMake to configure and build the executable.
 
 ```bash
-# Create a build directory
 mkdir build && cd build
-
-# Configure the project
 cmake ..
-
-# Build the executable
 make
-```
-
-The compiled `hsm` executable will be in the `build/` directory. For ease of use, you can copy it to the project root.
-
-```bash
+# Copy the executable to the root directory for convenience
 cp hsm ..
 cd ..
 ```
 
 ## 🚀 How to Communicate with the HSM
 
-The HSM is operated via the command line. Before running, you **must** set the master password as an environment variable. This password is used to derive the key that encrypts all other keys in the vault.
+### 1. Start the Server
+
+First, set the master password as an environment variable and run the server. It will listen on port **8443**.
+
+**On the very first run**, the server will automatically generate `server.key` and `server.crt` for SSL/TLS communication.
 
 ```bash
+# Set the password that protects all keys at rest
 export HSM_MASTER_PASSWORD="my-super-secret-password-123"
+
+# Run the server
+./hsm
+# First run output:
+# Generating new self-signed certificate and private key...
+# Successfully created server.key and server.crt.
+# HSM Server listening on port 8443
 ```
 
-### Available Commands
+The server will now be running. You can connect to it from another terminal.
 
-#### 1. Create a Key
+### 2. Connect with a Client
 
-Create a new AES-256 key. This action requires a principal with `CREATE_KEY` permission.
+Use the `openssl s_client` tool to establish a secure connection. The `-quiet` flag is recommended to hide verbose connection info.
 
 ```bash
-./hsm create_key --key_id my-data-key --user admin
-# Output: Key 'my-data-key' created successfully.
+openssl s_client -connect localhost:8443 -quiet
 ```
 
-#### 2. Encrypt Data
+Once connected, you can type or paste your JSON request and press Enter.
 
-Encrypt a piece of data using a key. This uses the envelope encryption pattern. The output is a JSON bundle containing the ciphertext and the wrapped data key.
+### API Commands (JSON Format)
 
-```bash
-./hsm encrypt --key_id my-data-key --user app_user --data "this is a secret message"
-# Output:
-# Encryption successful. Bundle:
-# {"ciphertext":"...","data_iv":"...","data_tag":"...","dek_iv":"...","dek_tag":"...","key_id":"my-data-key","wrapped_dek":"..."}
-```
+#### A. Create a Key
 
-#### 3. Decrypt Data
+* **Request**:
+    ```json
+    {
+      "command": "create_key",
+      "user": "admin",
+      "params": {
+        "key_id": "my-api-key"
+      }
+    }
+    ```
 
-Decrypt a JSON bundle to retrieve the original plaintext.
+* **Response**:
+    ```json
+    {"status":"success","message":"Key 'my-api-key' created."}
+    ```
 
-```bash
-# Note: The JSON bundle must be passed as a single string.
-./hsm decrypt --user app_user --bundle '{"ciphertext":"...","data_iv":"...","data_tag":"...","dek_iv":"...","dek_tag":"...","key_id":"my-data-key","wrapped_dek":"..."}'
-# Output:
-# Decryption successful. Plaintext:
-# this is a secret message
-```
+#### B. Encrypt Data
 
-#### 4. Rotate a Key
+* **Request**:
+    ```json
+    {
+      "command": "encrypt",
+      "user": "app_user",
+      "params": {
+        "key_id": "my-api-key",
+        "data": "sensitive information"
+      }
+    }
+    ```
 
-Generate a new version of an existing key. This is critical for security compliance.
-
-```bash
-./hsm rotate_key --key_id my-data-key --user admin
-# Output: Key 'my-data-key' rotated successfully.
-```
+* **Response** (contains the encrypted bundle):
+    ```json
+    {"status":"success","data":{"bundle":"{\"ciphertext\":\"...\",\"data_iv\":\"...\"}"}}
+    ```
