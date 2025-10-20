@@ -1,49 +1,101 @@
-// src/AccessController.cpp
 #include "AccessController.h"
 #include <fstream>
 #include <sstream>
-#include <algorithm>
-#include <vector>
+#include <iomanip>
+#include <stdexcept>
+// No need for <openssl/sha.h> as EVP is now used
 
-AccessController::AccessController(const std::string& policy_file) {
-    std::ifstream file(policy_file);
+AccessController::AccessController(const std::string& passwordFile, const std::string& userFile) {
+    loadPasswords(passwordFile);
+    loadUsers(userFile);
+}
+
+void AccessController::loadPasswords(const std::string& filename) {
+    std::ifstream file(filename);
     if (!file.is_open()) {
-        // You might want to log an error here. For now, we'll proceed with empty policies.
-        return;
+        throw std::runtime_error("Could not open password file: " + filename);
     }
-
     std::string line;
-    // Read the file line by line
     while (std::getline(file, line)) {
         std::stringstream ss(line);
-        std::string item;
-        std::vector<std::string> items;
+        std::string username, hash;
+        if (std::getline(ss, username, '\t') && std::getline(ss, hash)) {
+            passwordHashes[username] = hash;
+        }
+    }
+}
 
-        // Split the line by commas
-        while (std::getline(ss, item, ',')) {
-            // Trim whitespace (optional but good practice)
-            item.erase(item.find_last_not_of(" \n\r\t")+1);
-            item.erase(0, item.find_first_not_of(" \n\r\t"));
-            if (!item.empty()) {
-                items.push_back(item);
+void AccessController::loadUsers(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open user permissions file: " + filename);
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string username, permission;
+        if (std::getline(ss, username, '\t')) {
+            while (std::getline(ss, permission, '\t')) {
+                userPermissions[username].push_back(permission);
             }
         }
+    }
+}
 
-        if (items.size() >= 1) {
-            // The first item is the principal
-            std::string principal = items[0];
-            // The rest are the allowed actions
-            policies_[principal] = std::vector<std::string>(items.begin() + 1, items.end());
+std::string AccessController::hashPassword(const std::string& password) const {
+    EVP_MD_CTX *mdctx;
+    const EVP_MD *md;
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len;
+
+    md = EVP_sha256();
+    mdctx = EVP_MD_CTX_new();
+
+    if (mdctx == NULL) {
+        throw std::runtime_error("Failed to create EVP_MD_CTX");
+    }
+
+    if (1 != EVP_DigestInit_ex(mdctx, md, NULL)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("EVP_DigestInit_ex failed");
+    }
+
+    if (1 != EVP_DigestUpdate(mdctx, password.c_str(), password.size())) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("EVP_DigestUpdate failed");
+    }
+
+    if (1 != EVP_DigestFinal_ex(mdctx, hash, &hash_len)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("EVP_DigestFinal_ex failed");
+    }
+
+    EVP_MD_CTX_free(mdctx);
+
+    std::stringstream ss;
+    for (unsigned int i = 0; i < hash_len; i++) {
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    }
+    return ss.str();
+}
+
+bool AccessController::authenticate(const std::string& username, const std::string& password) const {
+    if (passwordHashes.find(username) == passwordHashes.end()) {
+        return false;
+    }
+    return passwordHashes.at(username) == hashPassword(password);
+}
+
+bool AccessController::authorize(const std::string& username, const std::string& operation) const {
+    if (userPermissions.find(username) == userPermissions.end()) {
+        return false;
+    }
+    const auto& perms = userPermissions.at(username);
+    for (const auto& p : perms) {
+        if (p == operation) {
+            return true;
         }
     }
+    return false;
 }
 
-// The can_perform method remains unchanged.
-bool AccessController::can_perform(const std::string& principal, const std::string& action) const {
-    auto it = policies_.find(principal);
-    if (it == policies_.end()) {
-        return false; // Principal not found
-    }
-    const auto& allowed_actions = it->second;
-    return std::find(allowed_actions.begin(), allowed_actions.end(), action) != allowed_actions.end();
-}

@@ -1,142 +1,173 @@
+Software HSM Implementation in C++ with OpenSSL
 
-# Software HSM Implementation
+This project is a software simulation of a Hardware Security Module (HSM) that runs as a secure TLS server. It provides cryptographic functionalities like key generation, encryption, decryption, and signing over a network via a JSON-based API, while enforcing access control and managing the key lifecycle.
 
-This project is a C++ implementation of a software Hardware Security Module (HSM). It runs as a **secure SSL/TLS server** that accepts JSON-based requests to perform cryptographic operations. It uses the OpenSSL library and demonstrates key management principles like secure storage, access control, and envelope encryption.
+Project Structure
 
-## Features
+The project is organized into several components, each represented by a C++ class:
 
--   **Auto-Generated Certificates**: Automatically creates a self-signed SSL certificate and private key on first launch.
--   **Secure API Server**: Runs as a daemon, communicating over a TLS-encrypted socket.
--   **JSON-RPC Style**: Accepts and returns easy-to-parse JSON messages.
--   **Key Storage Vault**: Securely stores keys encrypted at rest using a master key derived from a password.
--   **Cryptographic Engine**: Performs AES-256-GCM encryption/decryption.
--   **Access Control**: Role-based access control managed via a `policies.json` file.
--   **Key Lifecycle Management**: Supports key creation and rotation.
--   **Envelope Encryption**: Implements the envelope encryption pattern for securing data.
+AccessController: Manages user authentication and authorization.
 
-## Prerequisites
+KeyVault: Handles the secure storage and management of cryptographic keys.
 
-1.  **C++ Compiler**: A modern C++ compiler (supporting C++17).
-2.  **CMake**: Version 3.10 or higher.
-3.  **OpenSSL**: The development libraries (e.g., `libssl-dev` on Debian/Ubuntu).
-4.  **nlohmann/json**: A header-only JSON library for C++.
+CryptoEngine: Performs all cryptographic operations using OpenSSL.
 
-## 🛠️ Setup and Build Instructions
+HSM: The main class that orchestrates the different components and exposes the HSM's functionality.
 
-### 1. Initial Setup
+main.cpp: The entry point of the application, which runs the TLS server.
 
-Clone or download the project and navigate into the directory. Create the required directories and files:
+The project directory is structured as follows:
 
-```bash
-mkdir vault
-mkdir include
-```
+/HSM
+|-- AccessController.h
+|-- AccessController.cpp
+|-- KeyVault.h
+|-- KeyVault.cpp
+|-- CryptoEngine.h
+|-- CryptoEngine.cpp
+|-- HSM.h
+|-- HSM.cpp
+|-- main.cpp
+|-- users.tsv
+|-- passwords.tsv
+|-- cert.pem       <-- You will generate this
+|-- key.pem        <-- You will generate this
+|-- KeyFolder/
 
-### 2. Get nlohmann/json
 
-Download the single header file `json.hpp` from the [nlohmann/json repository](https://github.com/nlohmann/json/releases) and place it inside the `include/` directory.
+Configuration Files
 
-```bash
-wget [https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp](https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp) -O include/json.hpp
-```
+The HSM uses two TSV (Tab-Separated Values) files for configuration:
 
-### 3. Create Policy File
+passwords.tsv
 
-Create a file named `policies.json` in the project root. This file defines which "principals" (users/roles) can perform which actions.
+This file stores user credentials. Each line represents a user with their username and the SHA-256 hash of their password, separated by a tab.
+Format: <username>\t<password_hash>
 
-**`policies.json` example:**
-```json
+users.tsv
+
+This file defines the access control list, specifying which operations each user is permitted to perform.
+Format: <username>\t<permission1> <permission2> ...
+
+How to Compile and Run
+
+Prerequisites
+
+A C++ compiler (g++)
+
+OpenSSL library and headers installed (libssl-dev on Debian/Ubuntu)
+
+1. Generate TLS Certificate
+
+First, you need to generate a self-signed certificate and a private key for the server to use for TLS. Run the following command:
+
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj "/CN=localhost"
+
+
+This will create cert.pem and key.pem in your project directory.
+
+2. Compilation
+
+Compile the project using the following g++ command:
+
+g++ main.cpp HSM.cpp AccessController.cpp KeyVault.cpp CryptoEngine.cpp -o hsm_server -lssl -lcrypto
+
+
+3. Running the HSM Server
+
+To run the HSM, execute the compiled binary:
+
+./hsm_server
+
+
+The server will start and listen for secure connections on port 8443.
+
+JSON API
+
+The server accepts requests in JSON format. All data for encryption, decryption, or signing must be Base64 encoded.
+
+API Commands
+
+Create Key
+
+Request:
+
 {
-    "admin": [
-        "CREATE_KEY"
-    ],
-    "app_user": [
-        "ENCRYPT",
-        "DECRYPT"
-    ]
+  "command": "create-key",
+  "username": "admin",
+  "password": "your_password",
+  "key_name": "new-aes-key"
 }
-```
 
-### 4. Build the Project
 
-Use CMake to configure and build the executable.
+Response:
 
-```bash
-mkdir build && cd build
-cmake ..
-make
-# Copy the executable to the root directory for convenience
-cp hsm ..
-cd ..
-```
+{"status":"success","message":"Key created successfully.","data":""}
 
-## 🚀 How to Communicate with the HSM
 
-### 1. Start the Server
+Encrypt Data
 
-First, set the master password as an environment variable and run the server. It will listen on port **8443**.
+Request:
 
-**On the very first run**, the server will automatically generate `server.key` and `server.crt` for SSL/TLS communication.
+{
+  "command": "encrypt",
+  "username": "user1",
+  "password": "user_password",
+  "key_name": "my-aes-key",
+  "data": "BASE64_ENCODED_PLAINTEXT"
+}
 
-```bash
-# Set the password that protects all keys at rest
-export HSM_MASTER_PASSWORD="my-super-secret-password-123"
 
-# Run the server
-./hsm
-# First run output:
-# Generating new self-signed certificate and private key...
-# Successfully created server.key and server.crt.
-# HSM Server listening on port 8443
-```
+Response:
 
-The server will now be running. You can connect to it from another terminal.
+{"status":"success","message":"Data encrypted.","data":"BASE64_ENCODED_CIPHERTEXT"}
 
-### 2. Connect with a Client
 
-Use the `openssl s_client` tool to establish a secure connection. The `-quiet` flag is recommended to hide verbose connection info.
+Decrypt Data
 
-```bash
-openssl s_client -connect localhost:8443 -quiet
-```
+Request:
 
-Once connected, you can type or paste your JSON request and press Enter.
+{
+  "command": "decrypt",
+  "username": "user1",
+  "password": "user_password",
+  "key_name": "my-aes-key",
+  "data": "BASE64_ENCODED_CIPHERTEXT"
+}
 
-### API Commands (JSON Format)
 
-#### A. Create a Key
+Response:
 
-* **Request**:
-    ```json
-    {
-      "command": "create_key",
-      "user": "admin",
-      "params": {
-        "key_id": "my-api-key"
-      }
-    }
-    ```
+{"status":"success","message":"Data decrypted.","data":"BASE64_ENCODED_PLAINTEXT"}
 
-* **Response**:
-    ```json
-    {"status":"success","message":"Key 'my-api-key' created."}
-    ```
 
-#### B. Encrypt Data
+Sign Data
 
-* **Request**:
-    ```json
-    {
-      "command": "encrypt",
-      "user": "app_user",
-      "params": {
-        "key_id": "my-api-key",
-        "data": "sensitive information"
-      }
-    }
-    ```
+Request:
 
-* **Response** (contains the encrypted bundle):
-    ```json
-    {"status":"success","data":{"bundle":"{\"ciphertext\":\"...\",\"data_iv\":\"...\"}"}}
-    ```
+{
+  "command": "sign",
+  "username": "admin",
+  "password": "your_password",
+  "key_name": "my-signing-key",
+  "data": "BASE64_ENCODED_DATA_TO_SIGN"
+}
+
+
+Response:
+
+{"status":"success","message":"Data signed.","data":"BASE64_ENCODED_SIGNATURE"}
+
+
+How to Connect (Example using OpenSSL)
+
+You can use the openssl s_client tool to connect to the server and send JSON requests.
+
+Start the server: ./hsm_server
+
+In another terminal, connect with s_client:
+
+openssl s_client -connect localhost:8443
+
+
+Once connected, paste your JSON request and press Enter twice. The server will process the request and send back a JSON response.

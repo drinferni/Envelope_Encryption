@@ -1,106 +1,235 @@
 #include "CryptoProcessor.h"
-#include <openssl/err.h>
 #include <stdexcept>
-#include <iomanip>
-#include <sstream>
+#include <vector>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#include <openssl/aes.h>
+#include <openssl/ec.h>      // For EC curve definitions
+#include <openssl/obj_mac.h> // For NID_prime256v1
 
-std::vector<unsigned char> CryptoEngine::generate_key(size_t key_len_bytes) {
-    std::vector<unsigned char> key(key_len_bytes);
-    if (RAND_bytes(key.data(), key.size()) != 1) {
-        throw std::runtime_error("Failed to generate random key");
-    }
-    return key;
-}
+// --- Symmetric Encryption (AES-256-GCM) ---
 
-std::vector<unsigned char> CryptoEngine::derive_key_from_password(const std::string& password, const std::vector<unsigned char>& salt, int key_len_bytes) {
-    std::vector<unsigned char> key(key_len_bytes);
-    if (PKCS5_PBKDF2_HMAC(password.c_str(), password.length(),
-                          salt.data(), salt.size(), 10000, // 10000 iterations
-                          EVP_sha256(), key.size(), key.data()) != 1) {
-        throw std::runtime_error("Failed to derive key from password");
-    }
-    return key;
-}
+std::string CryptoEngine::encrypt(const std::string& plaintext, const std::string& key) {
+    if (key.length() != 32) throw std::runtime_error("Invalid key size for AES-256.");
 
-bool CryptoEngine::encrypt_aes_gcm(const std::vector<unsigned char>& plaintext, const std::vector<unsigned char>& key, const std::vector<unsigned char>& iv, std::vector<unsigned char>& ciphertext, std::vector<unsigned char>& tag) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) return false;
-
+    EVP_CIPHER_CTX *ctx;
     int len;
     int ciphertext_len;
+    unsigned char iv[AES_BLOCK_SIZE];
+    unsigned char ciphertext[plaintext.length() + AES_BLOCK_SIZE];
 
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL)) goto err;
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), NULL)) goto err;
-    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, key.data(), iv.data())) goto err;
+    // Generate random IV
+    if (RAND_bytes(iv, sizeof(iv)) != 1) {
+        throw std::runtime_error("Failed to generate IV.");
+    }
 
-    ciphertext.resize(plaintext.size());
-    if (1 != EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext.data(), plaintext.size())) goto err;
+    if (!(ctx = EVP_CIPHER_CTX_new())) throw std::runtime_error("Failed to create cipher context.");
+
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, (const unsigned char*)key.c_str(), iv)) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("EncryptInit failed.");
+    }
+
+    if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, (const unsigned char*)plaintext.c_str(), plaintext.length())) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("EncryptUpdate failed.");
+    }
     ciphertext_len = len;
 
-    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len)) goto err;
+    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("EncryptFinal failed.");
+    }
     ciphertext_len += len;
-    ciphertext.resize(ciphertext_len);
-    
-    tag.resize(16); // GCM tag is 16 bytes
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data())) goto err;
 
     EVP_CIPHER_CTX_free(ctx);
-    return true;
 
-err:
-    EVP_CIPHER_CTX_free(ctx);
-    return false;
+    std::string result(reinterpret_cast<char*>(iv), sizeof(iv));
+    result.append(reinterpret_cast<char*>(ciphertext), ciphertext_len);
+    return result;
 }
 
-bool CryptoEngine::decrypt_aes_gcm(const std::vector<unsigned char>& ciphertext, const std::vector<unsigned char>& key, const std::vector<unsigned char>& iv, const std::vector<unsigned char>& tag, std::vector<unsigned char>& plaintext) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) return false;
+std::string CryptoEngine::decrypt(const std::string& ciphertext, const std::string& key) {
+    if (key.length() != 32) throw std::runtime_error("Invalid key size for AES-256.");
+    if (ciphertext.length() < AES_BLOCK_SIZE) throw std::runtime_error("Invalid ciphertext size.");
 
+    EVP_CIPHER_CTX *ctx;
     int len;
     int plaintext_len;
-    int ret;
+    unsigned char plaintext[ciphertext.length()];
+    const unsigned char* iv = (const unsigned char*)ciphertext.c_str();
+    const unsigned char* ct = (const unsigned char*)ciphertext.c_str() + AES_BLOCK_SIZE;
+    int ct_len = ciphertext.length() - AES_BLOCK_SIZE;
 
-    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL)) goto err;
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), NULL)) goto err;
-    if (1 != EVP_DecryptInit_ex(ctx, NULL, NULL, key.data(), iv.data())) goto err;
-    
-    plaintext.resize(ciphertext.size());
-    if (1 != EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(), ciphertext.size())) goto err;
+    if (!(ctx = EVP_CIPHER_CTX_new())) throw std::runtime_error("Failed to create cipher context.");
+
+    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, (const unsigned char*)key.c_str(), iv)) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("DecryptInit failed.");
+    }
+
+    if (1 != EVP_DecryptUpdate(ctx, plaintext, &len, ct, ct_len)) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("DecryptUpdate failed.");
+    }
     plaintext_len = len;
 
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, tag.size(), (void*)tag.data())) goto err;
+    if (1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len)) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("DecryptFinal failed. Tag verification error?");
+    }
+    plaintext_len += len;
 
-    ret = EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len);
+    EVP_CIPHER_CTX_free(ctx);
+
+    return std::string(reinterpret_cast<char*>(plaintext), plaintext_len);
+}
+
+// --- Asymmetric Signing & Verification ---
+
+std::string CryptoEngine::sign(const std::string& data, const std::string& privateKeyPem) {
+    BIO* bio = BIO_new_mem_buf(privateKeyPem.c_str(), -1);
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+    if (!pkey) throw std::runtime_error("Failed to read private key.");
+
+    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+    if (!md_ctx) {
+        EVP_PKEY_free(pkey);
+        throw std::runtime_error("Failed to create signature context.");
+    }
+
+    if (EVP_DigestSignInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to initialize digest sign.");
+    }
+
+    if (EVP_DigestSignUpdate(md_ctx, data.c_str(), data.length()) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to update digest sign.");
+    }
     
-    EVP_CIPHER_CTX_free(ctx);
-
-    if (ret > 0) {
-        plaintext_len += len;
-        plaintext.resize(plaintext_len);
-        return true;
-    } else {
-        return false;
+    size_t sig_len;
+    if (EVP_DigestSignFinal(md_ctx, NULL, &sig_len) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to get signature length.");
     }
-err:
-    EVP_CIPHER_CTX_free(ctx);
-    return false;
+    
+    std::vector<unsigned char> signature(sig_len);
+    if (EVP_DigestSignFinal(md_ctx, signature.data(), &sig_len) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to create signature.");
+    }
+
+    EVP_PKEY_free(pkey);
+    EVP_MD_CTX_free(md_ctx);
+    return std::string(signature.begin(), signature.end());
 }
 
-std::vector<unsigned char> CryptoEngine::hex_to_bytes(const std::string& hex) {
-    std::vector<unsigned char> bytes;
-    for (unsigned int i = 0; i < hex.length(); i += 2) {
-        std::string byteString = hex.substr(i, 2);
-        unsigned char byte = (unsigned char) strtol(byteString.c_str(), NULL, 16);
-        bytes.push_back(byte);
+
+bool CryptoEngine::verify(const std::string& data, const std::string& signature, const std::string& publicKeyPem) {
+    BIO* bio = BIO_new_mem_buf(publicKeyPem.c_str(), -1);
+    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+    if (!pkey) throw std::runtime_error("Failed to read public key.");
+
+    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+     if (!md_ctx) {
+        EVP_PKEY_free(pkey);
+        throw std::runtime_error("Failed to create verification context.");
     }
-    return bytes;
+    
+    if (EVP_DigestVerifyInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to initialize digest verify.");
+    }
+
+    if (EVP_DigestVerifyUpdate(md_ctx, data.c_str(), data.length()) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(md_ctx);
+        throw std::runtime_error("Failed to update digest verify.");
+    }
+    
+    int result = EVP_DigestVerifyFinal(md_ctx, (const unsigned char*)signature.c_str(), signature.length());
+
+    EVP_PKEY_free(pkey);
+    EVP_MD_CTX_free(md_ctx);
+    
+    return result == 1;
 }
 
-std::string CryptoEngine::bytes_to_hex(const std::vector<unsigned char>& bytes) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-    for (unsigned char b : bytes) {
-        ss << std::setw(2) << static_cast<int>(b);
+// --- Key Generation ---
+
+std::string CryptoEngine::generateAESKey() {
+    unsigned char key[32];
+    if (RAND_bytes(key, sizeof(key)) != 1) {
+        throw std::runtime_error("Failed to generate AES key.");
     }
-    return ss.str();
+    return std::string(reinterpret_cast<char*>(key), sizeof(key));
 }
+
+std::pair<std::string, std::string> CryptoEngine::generateRSAKeyPair() {
+    EVP_PKEY *pkey = EVP_PKEY_new();
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+    if (EVP_PKEY_keygen_init(ctx) <= 0) throw std::runtime_error("RSA keygen init failed.");
+    if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 4096) <= 0) throw std::runtime_error("Failed to set RSA key bits.");
+    if (EVP_PKEY_keygen(ctx, &pkey) <= 0) throw std::runtime_error("RSA keygen failed.");
+    EVP_PKEY_CTX_free(ctx);
+
+    BIO *priv_bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PrivateKey(priv_bio, pkey, NULL, NULL, 0, NULL, NULL);
+    char *priv_key_str;
+    long priv_len = BIO_get_mem_data(priv_bio, &priv_key_str);
+    std::string priv_key(priv_key_str, priv_len);
+    BIO_free(priv_bio);
+
+    BIO *pub_bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PUBKEY(pub_bio, pkey);
+    char *pub_key_str;
+    long pub_len = BIO_get_mem_data(pub_bio, &pub_key_str);
+    std::string pub_key(pub_key_str, pub_len);
+    BIO_free(pub_bio);
+
+    EVP_PKEY_free(pkey);
+    return {priv_key, pub_key};
+}
+
+std::pair<std::string, std::string> CryptoEngine::generateECKeyPair(const std::string& curveName) {
+    int nid = OBJ_txt2nid(curveName.c_str());
+    if (nid == NID_undef) {
+        throw std::runtime_error("Unknown or unsupported curve name: " + curveName);
+    }
+
+    EVP_PKEY *pkey = NULL;
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+    if (EVP_PKEY_keygen_init(ctx) <= 0) throw std::runtime_error("EC keygen init failed.");
+    if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, nid) <= 0) throw std::runtime_error("Failed to set EC curve.");
+    if (EVP_PKEY_keygen(ctx, &pkey) <= 0) throw std::runtime_error("EC keygen failed.");
+    EVP_PKEY_CTX_free(ctx);
+
+    BIO *priv_bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PrivateKey(priv_bio, pkey, NULL, NULL, 0, NULL, NULL);
+    char *priv_key_str;
+    long priv_len = BIO_get_mem_data(priv_bio, &priv_key_str);
+    std::string priv_key(priv_key_str, priv_len);
+    BIO_free(priv_bio);
+
+    BIO *pub_bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_PUBKEY(pub_bio, pkey);
+    char *pub_key_str;
+    long pub_len = BIO_get_mem_data(pub_bio, &pub_key_str);
+    std::string pub_key(pub_key_str, pub_len);
+    BIO_free(pub_bio);
+
+    EVP_PKEY_free(pkey);
+    return {priv_key, pub_key};
+}
+

@@ -1,0 +1,2 @@
+admin	create-key	encrypt	decrypt	sign
+user1	encrypt	decrypt

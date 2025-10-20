@@ -1,84 +1,109 @@
 #include "KeyVault.h"
 #include "CryptoProcessor.h"
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
-#include <chrono>
+#include <ctime>
+#include <filesystem>
 
-// JSON serialization for KeyMetadata
-void to_json(json& j, const KeyMetadata& m) {
-    j = json{{"key_id", m.key_id}, {"version", m.version}, {"algorithm", m.algorithm}, {"status", m.status}, {"creation_date", m.creation_date}};
-}
-void from_json(const json& j, KeyMetadata& m) {
-    j.at("key_id").get_to(m.key_id);
-    j.at("version").get_to(m.version);
-    j.at("algorithm").get_to(m.algorithm);
-    j.at("status").get_to(m.status);
-    j.at("creation_date").get_to(m.creation_date);
-}
+namespace fs = std::filesystem;
 
-KeyVault::KeyVault(const std::string& vault_path, const std::string& master_password) : vault_path_(vault_path) {
-    // A fixed salt is insecure for production, but simple for this example.
-    // In a real system, this should be stored securely.
-    std::vector<unsigned char> salt = {'s', 'a', 'l', 't', 'y', 's', 'a', 'l', 't'};
-    master_key_ = CryptoEngine::derive_key_from_password(master_password, salt, 32); // 32 bytes for AES-256
-}
+KeyVault::KeyVault(const std::string& storagePath) : storagePath(storagePath) {}
 
-bool KeyVault::store_key(const KeyMetadata& metadata, const std::vector<unsigned char>& plaintext_key) {
-    // 1. Encrypt the key material with the master key
-    auto iv = CryptoEngine::generate_key(12); // GCM recommended IV size
-    std::vector<unsigned char> ciphertext;
-    std::vector<unsigned char> tag;
-
-    if (!CryptoEngine::encrypt_aes_gcm(plaintext_key, master_key_, iv, ciphertext, tag)) {
-        return false;
+bool KeyVault::createKey(const std::string& keyName, const std::string& algorithm) {
+    if (keyName.empty() || keyName.find("..") != std::string::npos) {
+        return false; // Invalid key name
     }
 
-    // 2. Create a JSON object to store the wrapped key and metadata
-    json key_file_content;
-    key_file_content["metadata"] = metadata;
-    key_file_content["iv"] = CryptoEngine::bytes_to_hex(iv);
-    key_file_content["tag"] = CryptoEngine::bytes_to_hex(tag);
-    key_file_content["ciphertext"] = CryptoEngine::bytes_to_hex(ciphertext);
+    std::string path = storagePath + "/" + keyName;
+    if (fs::exists(path)) {
+        return false; // Key already exists
+    }
 
-    // 3. Write to file
-    std::ofstream ofs(vault_path_ + "/" + metadata.key_id + ".json");
-    if (!ofs.is_open()) return false;
-    ofs << key_file_content.dump(4);
-    return true;
-}
+    KeyData keyData;
+    keyData.algorithm = algorithm;
 
-bool KeyVault::load_key(const std::string& key_id, KeyMetadata& metadata, std::vector<unsigned char>& plaintext_key) {
-    // 1. Read the key file
-    std::ifstream ifs(vault_path_ + "/" + key_id + ".json");
-    if (!ifs.is_open()) return false;
-    json key_file_content;
-    ifs >> key_file_content;
+    if (algorithm == "AES") {
+        keyData.privateKey = CryptoEngine::generateAESKey();
+    } else if (algorithm == "RSA") {
+        auto keyPair = CryptoEngine::generateRSAKeyPair();
+        keyData.privateKey = keyPair.first;
+        keyData.publicKey = keyPair.second;
+    } else if (algorithm == "EC") {
+        auto keyPair = CryptoEngine::generateECKeyPair();
+        keyData.privateKey = keyPair.first;
+        keyData.publicKey = keyPair.second;
+    } else {
+        return false; // Unsupported algorithm
+    }
     
-    // 2. Parse the content
-    metadata = key_file_content["metadata"].get<KeyMetadata>();
-    auto iv = CryptoEngine::hex_to_bytes(key_file_content["iv"]);
-    auto tag = CryptoEngine::hex_to_bytes(key_file_content["tag"]);
-    auto ciphertext = CryptoEngine::hex_to_bytes(key_file_content["ciphertext"]);
-
-    // 3. Decrypt the key material with the master key
-    if (!CryptoEngine::decrypt_aes_gcm(ciphertext, master_key_, iv, tag, plaintext_key)) {
-        return false;
-    }
-
+    time_t now = time(0);
+    keyData.metadata["creation_date"] = ctime(&now);
+    keyData.metadata["state"] = "enabled";
+    
+    saveKeyToFile(path, keyData);
     return true;
 }
 
-bool KeyVault::key_exists(const std::string& key_id) const {
-    std::ifstream f(vault_path_ + "/" + key_id + ".json");
-    return f.good();
+KeyData KeyVault::getKey(const std::string& keyName) const {
+    std::string path = storagePath + "/" + keyName;
+    if (!fs::exists(path)) {
+        throw std::runtime_error("Key not found.");
+    }
+    return loadKeyFromFile(path);
 }
 
-bool KeyVault::update_metadata(const KeyMetadata& metadata) {
-    std::vector<unsigned char> plaintext_key;
-    KeyMetadata old_metadata;
-    if (!load_key(metadata.key_id, old_metadata, plaintext_key)) {
-        return false;
+void KeyVault::saveKeyToFile(const std::string& path, const KeyData& keyData) {
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open key file for writing: " + path);
     }
-    // Now store it again with the new metadata
-    return store_key(metadata, plaintext_key);
+    file << "algorithm:" << keyData.algorithm << std::endl;
+    for (const auto& pair : keyData.metadata) {
+        file << pair.first << ":" << pair.second; // ctime includes a newline
+    }
+    file << "---PRIVATE_KEY---" << std::endl;
+    file << keyData.privateKey << std::endl;
+    if (!keyData.publicKey.empty()) {
+        file << "---PUBLIC_KEY---" << std::endl;
+        file << keyData.publicKey << std::endl;
+    }
 }
+
+KeyData KeyVault::loadKeyFromFile(const std::string& path) const {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open key file for reading: " + path);
+    }
+
+    KeyData keyData;
+    std::string line;
+    std::string* current_key_buffer = nullptr;
+
+    while (std::getline(file, line)) {
+        if (line.rfind("algorithm:", 0) == 0) {
+            keyData.algorithm = line.substr(10);
+        } else if (line.rfind("creation_date:", 0) == 0) {
+            keyData.metadata["creation_date"] = line.substr(14) + "\n";
+        } else if (line.rfind("state:", 0) == 0) {
+            keyData.metadata["state"] = line.substr(6);
+        } else if (line == "---PRIVATE_KEY---") {
+            current_key_buffer = &keyData.privateKey;
+            keyData.privateKey.clear();
+        } else if (line == "---PUBLIC_KEY---") {
+            current_key_buffer = &keyData.publicKey;
+            keyData.publicKey.clear();
+        } else if (current_key_buffer) {
+            *current_key_buffer += line + "\n";
+        }
+    }
+    return keyData;
+}
+
+
+void KeyVault::zeroizeAllKeys() {
+    for (const auto& entry : fs::directory_iterator(storagePath)) {
+        fs::remove(entry.path());
+    }
+}
+
