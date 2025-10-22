@@ -7,14 +7,6 @@
 
 class CryptoEngine {
 public:
-    // Symmetric encryption
-    std::string encrypt(const std::string& plaintext, const std::string& key);
-    std::string decrypt(const std::string& ciphertext, const std::string& key);
-
-    // Asymmetric signing and verification
-    std::string sign(const std::string& data, const std::string& privateKeyPem);
-    bool verify(const std::string& data, const std::string& signature, const std::string& publicKeyPem);
-
     // Key Generation
     static std::string generateAESKey();
     static std::pair<std::string, std::string> generateRSAKeyPair();
