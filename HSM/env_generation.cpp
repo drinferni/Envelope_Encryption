@@ -58,15 +58,6 @@ int main() {
     std::cout << "HSM Environment Setup Utility" << std::endl;
     std::cout << "-----------------------------" << std::endl;
 
-    // 1. Create KeyFolder directory
-    std::cout << "[1/4] Creating KeyFolder directory..." << std::endl;
-    if (mkdir("KeyFolder", 0755) == -1) {
-        // This is not a fatal error, the directory might already exist.
-        std::cout << "      -> Warning: Could not create KeyFolder. It may already exist." << std::endl;
-    } else {
-        std::cout << "      -> Success." << std::endl;
-    }
-
     // 2. Define users and create passwords.tsv
     std::cout << "[2/4] Creating passwords.tsv..." << std::endl;
     try {
@@ -100,18 +91,6 @@ int main() {
     user_file << "user1" << "\t" << "encrypt" << "\t" << "decrypt" << std::endl;
     user_file.close();
     std::cout << "      -> Success. Default permissions assigned." << std::endl;
-
-
-    // 4. Generate TLS certificate and key
-    std::cout << "[4/4] Generating self-signed TLS certificate (cert.pem & key.pem)..." << std::endl;
-    const char* openssl_command = "openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj \"/CN=localhost\"";
-    int result = system(openssl_command);
-    if (result == 0) {
-        std::cout << "      -> Success." << std::endl;
-    } else {
-        std::cerr << "      -> Error: Failed to execute OpenSSL command. Is OpenSSL installed and in your PATH?" << std::endl;
-        return 1;
-    }
 
     std::cout << "\nEnvironment setup complete!" << std::endl;
 

@@ -20,80 +20,6 @@ namespace fs = std::filesystem;
 
 // --- OpenSSL Helper Functions ---
 
-/**
- * @brief Encodes a raw byte buffer into a hex string.
- */
-std::string hexEncode(const unsigned char* bytes, size_t len) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0');
-    for (size_t i = 0; i < len; ++i) {
-        ss << std::setw(2) << static_cast<int>(bytes[i]);
-    }
-    return ss.str();
-}
-
-/**
- * @brief Generates a 256-bit (32-byte) AES key and returns it as a hex string.
- */
-std::string generateAESKey() {
-    // 256 bits = 32 bytes
-    unsigned char key[32];
-    if (RAND_bytes(key, sizeof(key)) != 1) {
-        std::cerr << "Error: OpenSSL RAND_bytes failed." << std::endl;
-        return ""; // Error
-    }
-    return hexEncode(key, sizeof(key));
-}
-
-/**
- * @brief Serializes a private EVP_PKEY to a PEM string.
- */
-std::string pkeyToString_private(EVP_PKEY *pkey) {
-    // Use a Memory BIO (Basic I/O) to write the key to memory
-    BIO *bio = BIO_new(BIO_s_mem());
-    if (!bio) {
-        std::cerr << "Error: OpenSSL BIO_new failed." << std::endl;
-        return "";
-    }
-
-    // Write the private key to the BIO in PKCS8 (modern) format
-    // No encryption on the PEM block itself (last NULLs)
-    if (PEM_write_bio_PKCS8PrivateKey(bio, pkey, NULL, NULL, 0, NULL, NULL) != 1) {
-        std::cerr << "Error: OpenSSL PEM_write_bio_PKCS8PrivateKey failed." << std::endl;
-        BIO_free(bio);
-        return "";
-    }
-
-    char *data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string str(data, len);
-    BIO_free(bio);
-    return str;
-}
-
-/**
- * @brief Serializes a public EVP_PKEY to a PEM string.
- */
-std::string pkeyToString_public(EVP_PKEY *pkey) {
-    BIO *bio = BIO_new(BIO_s_mem());
-    if (!bio) {
-        std::cerr << "Error: OpenSSL BIO_new failed." << std::endl;
-        return "";
-    }
-
-    // Write the public key to the BIO
-    if (PEM_write_bio_PUBKEY(bio, pkey) != 1) {
-        std::cerr << "Error: OpenSSL PEM_write_bio_PUBKEY failed." << std::endl;
-        BIO_free(bio);
-        return "";
-    }
-
-    char *data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string str(data, len);
-    BIO_free(bio);
-    return str;
-}
 
 // --- End OpenSSL Helper Functions ---
 
@@ -123,9 +49,8 @@ void KeyVault::saveKeyToFile(const std::string& path, const KeyData& keyData) {
         std::cerr << "Error: Could not create metadata file in " << path << std::endl;
         return;
     }
-    // As requested: "metadata ( name and algo ) separated by comma"
-    // Updated to use keyData.keyName
-    metaFile << keyData.keyName << "," << keyData.algorithm;
+    // Format: keyName,algorithm,parentKey
+    metaFile << keyData.keyName << "," << keyData.algorithm << "," << keyData.parentKey;
     metaFile.close();
 
     // 2. Write key files based on algorithm
@@ -177,10 +102,10 @@ KeyData KeyVault::loadKeyFromFile(const std::string& path) const {
     std::getline(metaFile, line);
     std::stringstream ss(line);
     
-    // Parse the "name,algo" format
-    // Updated to use keyData.keyName
+    // Parse the "name,algo,parentKey" format
     std::getline(ss, keyData.keyName, ',');
     std::getline(ss, keyData.algorithm, ',');
+    std::getline(ss, keyData.parentKey, ','); 
     
     metaFile.close();
 
@@ -201,23 +126,70 @@ KeyData KeyVault::loadKeyFromFile(const std::string& path) const {
 KeyVault::KeyVault(const std::string& storagePath) : storagePath(storagePath) {
     try {
         // This will create the directory if it doesn't exist.
-        // If it already exists, it does nothing.
         fs::create_directory(this->storagePath);
     } catch (const fs::filesystem_error& e) {
         std::cerr << "Error creating storage directory " << this->storagePath 
                   << ": " << e.what() << std::endl;
     }
+    // Load or create the master key
+    initializeMasterKey();
+}
+
+/**
+ * @brief Loads the master key from master_key.key, or creates one
+ * if it doesn't exist.
+ */
+void KeyVault::initializeMasterKey() {
+    fs::path masterKeyPath = fs::path(storagePath) / "master_key.key";
+
+    if (fs::exists(masterKeyPath)) {
+        // Key exists, load it
+        this->masterKey = readFileContent(masterKeyPath.string());
+        
+        if (this->masterKey.empty()) {
+            std::cerr << "Warning: Master key file " << masterKeyPath 
+                      << " exists but is empty. Generating a new one." << std::endl;
+            // If file is empty, fall through to generation logic
+        } else {
+            std::cout << "Loaded existing master key from " << masterKeyPath << std::endl;
+            return; // Successfully loaded
+        }
+    }
+
+    // If we're here, the key doesn't exist or was empty. Create a new one.
+    std::cout << "Generating new master key..." << std::endl;
+    this->masterKey = generateAESKey();
+
+    if (this->masterKey.empty()) {
+        std::cerr << "FATAL ERROR: Could not generate master key!" << std::endl;
+        // In a real app, you might want to throw an exception here
+        return;
+    }
+
+    std::ofstream keyFile(masterKeyPath);
+    if (keyFile) {
+        keyFile << this->masterKey;
+        keyFile.close();
+        std::cout << "Saved new master key to " << masterKeyPath << std::endl;
+    } else {
+        std::cerr << "FATAL ERROR: Could not write master key to " << masterKeyPath << std::endl;
+    }
+}
+
+/**
+ * @brief Returns the master AES key.
+ */
+std::string KeyVault::getMasterKey() const {
+    return this->masterKey;
 }
 
 /**
  * @brief Creates a new key, storing it in its own subdirectory.
- *
- * *** THIS FUNCTION IS MODIFIED TO USE OPENSSL ***
  */
-bool KeyVault::createKey(const std::string& keyName, const std::string& algorithm) {
+bool KeyVault::createKey(const std::string& keyName, const std::string& algorithm, const std::string& parentKeyName) {
     fs::path keyPath = fs::path(storagePath) / keyName;
 
-    // Check for duplicates as requested
+    // Check for duplicates
     if (fs::exists(keyPath)) {
         std::cerr << "Error: Key folder '" << keyName << "' already exists." << std::endl;
         return false;
@@ -235,6 +207,7 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
     KeyData newKey;
     newKey.algorithm = algorithm;
     newKey.keyName = keyName; 
+    newKey.parentKey = parentKeyName; // Set the parent key name
 
     // --- Real Key Generation using OpenSSL ---
     EVP_PKEY *pkey = NULL;
@@ -244,7 +217,7 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
         newKey.privateKey = generateAESKey();
         if (newKey.privateKey.empty()) {
             std::cerr << "Error: AES key generation failed for " << keyName << std::endl;
-            fs::remove(keyPath); // Clean up empty folder
+            fs::remove_all(keyPath); // Clean up empty folder
             return false;
         }
         // publicKey remains empty for symmetric key
@@ -253,22 +226,22 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
         ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
         if (!ctx) {
             std::cerr << "Error: OpenSSL EVP_PKEY_CTX_new_id failed for RSA." << std::endl;
-            fs::remove(keyPath); return false;
+            fs::remove_all(keyPath); return false;
         }
         if (EVP_PKEY_keygen_init(ctx) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_keygen_init failed for RSA." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
         // Set RSA key bits to 2048
         if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_CTX_set_rsa_keygen_bits failed." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
         
         // Generate the key
         if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_keygen failed for RSA." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
 
         EVP_PKEY_CTX_free(ctx);
@@ -277,29 +250,29 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
         ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
          if (!ctx) {
             std::cerr << "Error: OpenSSL EVP_PKEY_CTX_new_id failed for EC." << std::endl;
-            fs::remove(keyPath); return false;
+            fs::remove_all(keyPath); return false;
         }
         if (EVP_PKEY_keygen_init(ctx) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_keygen_init failed for EC." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
         // Set EC curve to prime256v1 (NIST P-256)
         if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, NID_X9_62_prime256v1) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_CTX_set_ec_paramgen_curve_nid failed." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
 
         // Generate the key
         if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
             std::cerr << "Error: OpenSSL EVP_PKEY_keygen failed for EC." << std::endl;
-            EVP_PKEY_CTX_free(ctx); fs::remove(keyPath); return false;
+            EVP_PKEY_CTX_free(ctx); fs::remove_all(keyPath); return false;
         }
 
         EVP_PKEY_CTX_free(ctx);
 
     } else {
         std::cerr << "Error: Unknown algorithm '" << algorithm << "'." << std::endl;
-        fs::remove(keyPath);
+        fs::remove_all(keyPath);
         return false;
     }
 
@@ -311,7 +284,7 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
 
         if (newKey.privateKey.empty() || newKey.publicKey.empty()) {
             std::cerr << "Error: Key string serialization failed for " << keyName << std::endl;
-            fs::remove(keyPath);
+            fs::remove_all(keyPath);
             return false;
         }
     }
@@ -325,7 +298,7 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
 }
 
 /**
- * @brief Retrieves a key's data from the vault.
+ * @brief Retrieves a key's data from the vault (including private key material).
  */
 KeyData KeyVault::getKey(const std::string& keyName) const {
     fs::path keyPath = fs::path(storagePath) / keyName;
@@ -339,6 +312,71 @@ KeyData KeyVault::getKey(const std::string& keyName) const {
 }
 
 /**
+ * @brief Gets the public-facing key material.
+ * For AES, this is the symmetric key itself.
+ * For RSA/EC, this is the public key.
+ * @param keyName The name of the key.
+ * @return The key as a string, or an empty string if not found.
+ */
+std::string KeyVault::getPublicKey(const std::string& keyName) const {
+    // This function re-uses getKey, which loads the full key data.
+    KeyData keyData = getKey(keyName);
+
+    if (keyData.algorithm.empty()) {
+        return ""; // getKey() already printed an error
+    }
+
+    if (keyData.algorithm == "AES") {
+        return keyData.privateKey; // For AES, the "private" key is the only key
+    } else if (keyData.algorithm == "RSA" || keyData.algorithm == "EC") {
+        return keyData.publicKey;
+    }
+
+    // Should not happen if algorithm is known, but good to have.
+    std::cerr << "Error: Unknown algorithm type in getPublicKey for " << keyName << std::endl;
+    return "";
+}
+
+/**
+ * @brief Gets only the metadata for a key (name, algo, parent) from metadata.txt.
+ * This is more efficient than getKey() as it does not read the key files.
+ * @param keyName The name of the key.
+ * @return A KeyData struct with privateKey and publicKey fields guaranteed to be empty.
+ */
+KeyData KeyVault::getKeyMetadata(const std::string& keyName) const {
+    KeyData keyData; // Will be returned (private/public keys empty)
+    fs::path keyPath = fs::path(storagePath) / keyName;
+    std::string metadataPath = keyPath / "metadata.txt";
+
+    if (!fs::exists(metadataPath)) {
+        std::cerr << "Error: Key metadata for '" << keyName << "' not found." << std::endl;
+        return keyData; // Return empty struct
+    }
+
+    // 1. Read metadata
+    std::ifstream metaFile(metadataPath);
+    if (!metaFile) {
+        std::cerr << "Error: Could not open metadata file at " << metadataPath << std::endl;
+        return keyData; // Return empty struct
+    }
+
+    std::string line;
+    std::getline(metaFile, line);
+    std::stringstream ss(line);
+    
+    // Parse the "name,algo,parentKey" format
+    std::getline(ss, keyData.keyName, ',');
+    std::getline(ss, keyData.algorithm, ',');
+    std::getline(ss, keyData.parentKey, ','); 
+    
+    metaFile.close();
+
+    // privateKey and publicKey fields remain empty, as requested.
+    return keyData;
+}
+
+
+/**
  * @brief Prints the details of a specific key to the console.
  */
 void KeyVault::printKey(const std::string& keyName) {
@@ -350,10 +388,14 @@ void KeyVault::printKey(const std::string& keyName) {
         return; // Key not found or was invalid
     }
 
-    // Updated to use keyData.keyName
     std::cout << "\n--- Key Details: " << keyData.keyName << " ---" << std::endl;
     std::cout << "  Algorithm: " << keyData.algorithm << std::endl;
     
+    // Print parent key if it exists
+    if (!keyData.parentKey.empty()) {
+        std::cout << "  Parent Key: " << keyData.parentKey << std::endl;
+    }
+
     if (keyData.algorithm == "AES") {
         std::cout << "  Symmetric Key (hex): " << keyData.privateKey << std::endl;
     } else {
@@ -372,10 +414,15 @@ void KeyVault::zeroizeAllKeys() {
         if (fs::exists(storagePath)) {
             // Recursively remove the entire directory and all its contents
             fs::remove_all(storagePath);
+            std::cout << "Vault contents deleted." << std::endl;
         }
         // Re-create the empty root directory
         fs::create_directory(storagePath);
-        std::cout << "Vault has been zeroized." << std::endl;
+        std::cout << "Vault directory recreated." << std::endl;
+        
+        // After zeroizing, we must create a new master key
+        initializeMasterKey();
+
     } catch (const fs::filesystem_error& e) {
         std::cerr << "Error during zeroize: " << e.what() << std::endl;
     }
