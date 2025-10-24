@@ -29,10 +29,9 @@ Key Vault -> genrerate the master Key (random bits) (let us fix the master key f
 BaseCryptoProcessor -> encrypt using AES keys and updating the parent feild in the metadata. for all the 3 type of encryption.
 AWSHSM -> directly from the BaseCryptoProcessor , include provisoions of creating the heirarchy and storing is locally. Also the functionalities that it will give encrypted and and decrypted key
 AWSServer -> server interfact to conected to the server
---
-
 GoogleCloud ->  creating the heirarchy and versioning. encrypting data.
 GoogleCloud -> server interface to do it.
 
 --
-Azure
+Azure -> create a AzureHSM with only 1 key encryption (AES) (KEK is the master key of HSM) 
+

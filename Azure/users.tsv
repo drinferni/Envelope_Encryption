@@ -1,0 +1,2 @@
+bob	generateDEK
+alice	generateDEK	getDEKsForUser	encryptVolume	openVolume	closeVolume
