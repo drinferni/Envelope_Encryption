@@ -46,6 +46,9 @@ public:
      */
     bool unwrapKey(const std::string& parentKeyName, const std::string& childKeyName);
 
+    std::string encrypt(const std::string& parentKeyName , const std::string& childKey , const std::string& algorithm);
+    std::string decrypt(const std::string& parentKeyName , const std::string& childKey, const std::string& algorithm);
+
     KeyVault& vault; // Reference to the key vault
     std::map<std::string, std::string> wrapLog; // Maps childKeyName -> wrapAlgorithm
     std::string logFilePath; // Path to the wrap_log.txt

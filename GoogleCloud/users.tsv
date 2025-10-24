@@ -1,0 +1,2 @@
+bob	generateDataKey	unwrapKey
+alice	generateDataKey	generateDataKeyWithoutPlaintext	wrapKey	unwrapKey	listDeKs	generateCMK	getCmksForUser	getDeksForCmk	grantCmkAccess

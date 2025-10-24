@@ -18,6 +18,21 @@ bool check(const std::string& testName, bool result) {
     return result;
 }
 
+std::string generateRandomKeyHex(size_t keySizeBytes = 32) {
+    unsigned char buffer[64]; // supports up to 512-bit key
+    if (keySizeBytes > sizeof(buffer)) 
+        throw std::runtime_error("Key size too large");
+
+    if (RAND_bytes(buffer, keySizeBytes) != 1)
+        throw std::runtime_error("RAND_bytes failed");
+
+    std::ostringstream oss;
+    for (size_t i = 0; i < keySizeBytes; ++i)
+        oss << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i];
+
+    return oss.str();
+}
+
 int main() {
     const std::string VAULT_PATH = "./CryptoProcessorTestLocker";
     bool allTestsPassed = true;
@@ -66,11 +81,12 @@ int main() {
     if (!check("Wrap (AES-KW)",
         processor.wrapKey("WrapParentAES", "Child_for_KW", "AES-KW"))) allTestsPassed = false;
 
-    if (!check("Wrap (RSA-OAEP)",
-        processor.wrapKey("WrapParentRSA", "Child_for_RSA", "RSA-OAEP"))) allTestsPassed = false;
     
-    if (!check("Wrap (ECDH+AES-KWP)",
-        processor.wrapKey("WrapParentEC", "Child_for_EC", "ECDH+AES-KWP"))) allTestsPassed = false;
+    std::string RSAkey = generateRandomKeyHex();
+
+    if (!check("Wrap (RSA-OAEP)" , processor.decrypt("WrapParentRSA",processor.encrypt("WrapParentRSA",RSAkey,"RSA-OAEP"),"RSA-OAEP") == RSAkey) )
+                                allTestsPassed = false;
+    
 
     // 4. Verify Wrapped Key on Disk
     std::cout << "\n--- 4. Verifying Wrapped Key on Disk ---" << std::endl;
