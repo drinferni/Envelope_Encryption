@@ -44,9 +44,8 @@ public:
      * @return The decrypted private key (hex-encoded) as a string.
      * Returns an empty string on failure.
      */
-    std::string unwrapKey(const std::string& parentKeyName, const std::string& childKeyName);
+    bool unwrapKey(const std::string& parentKeyName, const std::string& childKeyName);
 
-private:
     KeyVault& vault; // Reference to the key vault
     std::map<std::string, std::string> wrapLog; // Maps childKeyName -> wrapAlgorithm
     std::string logFilePath; // Path to the wrap_log.txt

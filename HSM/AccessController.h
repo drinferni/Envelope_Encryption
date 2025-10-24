@@ -13,7 +13,6 @@ public:
     bool authenticate(const std::string& username, const std::string& password) const;
     bool authorize(const std::string& username, const std::string& operation) const;
 
-private:
     void loadPasswords(const std::string& filename);
     void loadUsers(const std::string& filename);
     std::string hashPassword(const std::string& password) const;

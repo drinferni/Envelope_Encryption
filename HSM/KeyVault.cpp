@@ -57,7 +57,7 @@ void KeyVault::saveKeyToFile(const std::string& path, const KeyData& keyData) {
     if (keyData.algorithm == "AES") {
         std::ofstream keyFile(fs::path(path) / "key.txt");
         if (keyFile) {
-            keyFile << keyData.privateKey;
+            keyFile << keyData.publicKey;
             keyFile.close();
         } else {
             std::cerr << "Error: Could not create key file in " << path << std::endl;
@@ -111,7 +111,7 @@ KeyData KeyVault::loadKeyFromFile(const std::string& path) const {
 
     // 2. Read key files based on algorithm
     if (keyData.algorithm == "AES") {
-        keyData.privateKey = readFileContent(fs::path(path) / "key.txt");
+        keyData.publicKey = readFileContent(fs::path(path) / "key.txt");
     } else if (keyData.algorithm == "RSA" || keyData.algorithm == "EC") {
         keyData.privateKey = readFileContent(fs::path(path) / "private.key");
         keyData.publicKey = readFileContent(fs::path(path) / "public.key");
@@ -214,8 +214,8 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
     EVP_PKEY_CTX *ctx = NULL;
 
     if (algorithm == "AES") {
-        newKey.privateKey = generateAESKey();
-        if (newKey.privateKey.empty()) {
+        newKey.publicKey = generateAESKey();
+        if (newKey.publicKey.empty()) {
             std::cerr << "Error: AES key generation failed for " << keyName << std::endl;
             fs::remove_all(keyPath); // Clean up empty folder
             return false;
@@ -301,6 +301,16 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
  * @brief Retrieves a key's data from the vault (including private key material).
  */
 KeyData KeyVault::getKey(const std::string& keyName) const {
+
+    if (keyName == "MASTER") {
+        KeyData mk;
+        mk.keyName = "MASTER";
+        mk.algorithm = "AES";
+        mk.publicKey = getMasterKey();
+
+        return mk;
+    }
+
     fs::path keyPath = fs::path(storagePath) / keyName;
 
     if (!fs::exists(keyPath) || !fs::is_directory(keyPath)) {
@@ -326,11 +336,7 @@ std::string KeyVault::getPublicKey(const std::string& keyName) const {
         return ""; // getKey() already printed an error
     }
 
-    if (keyData.algorithm == "AES") {
-        return keyData.privateKey; // For AES, the "private" key is the only key
-    } else if (keyData.algorithm == "RSA" || keyData.algorithm == "EC") {
-        return keyData.publicKey;
-    }
+    return keyData.publicKey;
 
     // Should not happen if algorithm is known, but good to have.
     std::cerr << "Error: Unknown algorithm type in getPublicKey for " << keyName << std::endl;
@@ -397,7 +403,7 @@ void KeyVault::printKey(const std::string& keyName) {
     }
 
     if (keyData.algorithm == "AES") {
-        std::cout << "  Symmetric Key (hex): " << keyData.privateKey << std::endl;
+        std::cout << "  Symmetric Key (hex): " << keyData.publicKey << std::endl;
     } else {
         std::cout << "  Private Key: " << "\n" << keyData.privateKey << std::endl;
         std::cout << "  Public Key:  " << "\n" << keyData.publicKey << std::endl;

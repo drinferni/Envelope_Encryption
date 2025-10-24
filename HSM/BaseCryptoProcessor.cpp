@@ -64,15 +64,21 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
     // 1. Get key data
     KeyData parentKey = vault.getKey(parentKeyName);
     KeyData childKey = vault.getKey(childKeyName);
-    if (parentKey.algorithm.empty() || childKey.algorithm.empty()) {
-        std::cerr << "Error: Parent or child key not found." << std::endl;
+    if (parentKey.keyName.empty() ) {
+        std::cerr << "Error: Parent  not found." << std::endl;
         return false;
     }
 
+    if (childKey.keyName.empty() ) {
+        std::cerr << "Error: child  not found." << std::endl;
+        return false;
+    }
+
+
     // 2. Get the key material to wrap (child's private key)
-    std::vector<unsigned char> keyToWrap_bytes = hexDecode(childKey.privateKey);
+    std::vector<unsigned char> keyToWrap_bytes = hexDecode(childKey.publicKey);
     std::vector<unsigned char> wrappedKey_bytes;
-    std::string finalPayload; // This will be saved as the new "privateKey"
+    std::string finalPayload; // This will be saved as the new "publicKey"
 
     try {
         if (algorithm == "AES-KWP") {
@@ -80,7 +86,7 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
                 std::cerr << "Error: AES-KWP requires an AES parent key." << std::endl;
                 return false;
             }
-            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.privateKey);
+            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.publicKey);
 
             // AES-KWP uses AES-256-WRAP-PAD cipher
             EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
@@ -120,7 +126,7 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
                 std::cerr << "Error: AES-KW (RFC 3394) requires key data to be a multiple of 8 bytes." << std::endl;
                 return false;
             }
-            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.privateKey);
+            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.publicKey);
 
             // AES-KW uses AES-256-WRAP cipher (no padding)
             EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
@@ -204,7 +210,7 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
             std::string eph_pub_pem = pkeyToString_public(eph_pkey);
             
             // 3. Derive shared secret
-            EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new(eph_pkey, NULL); // Use our new private key
+            EVP_PKEY_CTX *dctx = EVP_PKEY_CTX_new(eph_pkey, NULL); // Use our new public key
             if (!dctx) throw std::runtime_error("EVP_PKEY_CTX_new (derive) failed");
             if (EVP_PKEY_derive_init(dctx) <= 0) throw std::runtime_error("EVP_PKEY_derive_init failed");
             if (EVP_PKEY_derive_set_peer(dctx, parent_pub_pkey) <= 0) { // Set parent's pubkey as peer
@@ -273,7 +279,7 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
     }
 
     // 3. Save the wrapped key back to the vault
-    childKey.privateKey = finalPayload; // Overwrite with ciphertext
+    childKey.publicKey = finalPayload; // Overwrite with ciphertext
     childKey.parentKey = parentKeyName;   // Log the parent
     
     // Re-save the child key file with the new encrypted data
@@ -289,31 +295,31 @@ bool BaseCryptoProcessor::wrapKey(const std::string& parentKeyName, const std::s
 }
 
 
-std::string BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, const std::string& childKeyName) {
+bool BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, const std::string& childKeyName) {
     // 1. Find algorithm from log
     if (wrapLog.find(childKeyName) == wrapLog.end()) {
         std::cerr << "Error: Key '" << childKeyName << "' not found in wrap log." << std::endl;
-        return "";
+        return 0;
     }
     std::string algorithm = wrapLog[childKeyName];
 
     // 2. Get key data
     KeyData parentKey = vault.getKey(parentKeyName);
     KeyData childKey = vault.getKey(childKeyName);
-    if (parentKey.algorithm.empty() || childKey.algorithm.empty()) {
+    if (parentKey.keyName.empty() || childKey.keyName.empty()) {
         std::cerr << "Error: Parent or child key not found." << std::endl;
-        return "";
+        return 0;
     }
 
     // 3. Get encrypted payload
-    std::string payload = childKey.privateKey;
+    std::string payload = childKey.publicKey;
     std::vector<unsigned char> decryptedKey_bytes;
 
     try {
         if (algorithm == "AES-KWP") {
             if (parentKey.algorithm != "AES") throw std::runtime_error("Parent key is not AES");
             
-            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.privateKey);
+            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.publicKey);
             std::vector<unsigned char> wrappedKey_bytes = hexDecode(payload);
             
             EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
@@ -343,7 +349,7 @@ std::string BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, con
         } else if (algorithm == "AES-KW") {
             if (parentKey.algorithm != "AES") throw std::runtime_error("Parent key is not AES");
             
-            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.privateKey);
+            std::vector<unsigned char> wrapKey_bytes = hexDecode(parentKey.publicKey);
             std::vector<unsigned char> wrappedKey_bytes = hexDecode(payload);
             
             EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
@@ -374,7 +380,7 @@ std::string BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, con
         } else if (algorithm == "RSA-OAEP") {
             if (parentKey.algorithm != "RSA") throw std::runtime_error("Parent key is not RSA");
 
-            EVP_PKEY* pkey = stringToPkey(parentKey.privateKey, true); // Use private key to decrypt
+            EVP_PKEY* pkey = stringToPkey(parentKey.publicKey, true); // Use private key to decrypt
             if (!pkey) throw std::runtime_error("stringToPkey failed for RSA private key");
             
             std::vector<unsigned char> wrappedKey_bytes = hexDecode(payload);
@@ -414,7 +420,7 @@ std::string BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, con
             std::vector<unsigned char> wrappedKey_bytes = hexDecode(wrappedKey_hex);
 
             // 2. Load keys
-            EVP_PKEY* parent_priv_pkey = stringToPkey(parentKey.privateKey, true);
+            EVP_PKEY* parent_priv_pkey = stringToPkey(parentKey.publicKey, true);
             EVP_PKEY* eph_pub_pkey = stringToPkey(eph_pub_pem, false);
             if (!parent_priv_pkey || !eph_pub_pkey) {
                 throw std::runtime_error("Failed to load ECDH keys");
@@ -475,17 +481,25 @@ std::string BaseCryptoProcessor::unwrapKey(const std::string& parentKeyName, con
 
         } else {
             std::cerr << "Error: Unknown wrapping algorithm '" << algorithm << "' in log." << std::endl;
-            return "";
+            return 0;
         }
 
     } catch (const std::exception& e) {
         std::cerr << "Crypto Error: " << e.what() << std::endl;
         ERR_print_errors_fp(stderr);
-        return "";
+        return 0;
     }
 
     // 4. Return the hex-encoded plaintext key
     std::cout << "Successfully unwrapped key '" << childKeyName << "'." << std::endl;
-    return hexEncode(decryptedKey_bytes.data(), decryptedKey_bytes.size());
+
+        // 3. Save the wrapped key back to the vault
+    childKey.publicKey = hexEncode(decryptedKey_bytes.data(), decryptedKey_bytes.size()); // Overwrite with ciphertext
+    childKey.parentKey = parentKeyName;   // Log the parent
+    
+    // Re-save the child key file with the new encrypted data
+    vault.saveKeyToFile(vault.storagePath + "/" + childKeyName, childKey);
+
+    return 1;
 }
 

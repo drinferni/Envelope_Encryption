@@ -30,7 +30,5 @@ AccessController.o: AccessController.cpp AccessController.h
 Utils.o : Utils.cpp
 	$(CXX) $(CXXFLAGS) -c Utils.cpp -o $@
 
-
-
 clean:
-	rm -f *.o HSM
+	rm -f *.o BCP_test KeyVault_test
