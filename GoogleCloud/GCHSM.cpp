@@ -75,7 +75,20 @@ std::string GCHSM::encrypt(const std::string& username, const std::string& paren
     
     std::cout << "AuthZ Success: User '" << username << "' authorized for CMK '" << parentKeyName << "'." << std::endl;
 
-    return BaseCryptoProcessor::encrypt(parentKeyName,childkey,CryptoKeyAlgoMap[parentKeyName]);
+    if (!BaseCryptoProcessor::unwrapKey("MASTER", parentKeyName)) {
+        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        ERR_print_errors_fp(stderr);
+        return "";
+    }
+
+    std::string result = BaseCryptoProcessor::encrypt(parentKeyName,childkey,CryptoKeyAlgoMap[parentKeyName]);
+
+    if (!BaseCryptoProcessor::wrapKey("MASTER", parentKeyName, wrapLog[parentKeyName])) {
+        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        ERR_print_errors_fp(stderr);
+    }
+
+    return result;
 }
 
 std::string GCHSM::decrypt(const std::string& username, const std::string& parentKeyName, const std::string& childKey) {
@@ -88,7 +101,20 @@ std::string GCHSM::decrypt(const std::string& username, const std::string& paren
     std::cout << "AuthZ Success: User '" << username << "' authorized for CMK '" << parentKeyName << "'." << std::endl;
     std::cout << "To decrypt " << childKey << std::endl;
 
-    return BaseCryptoProcessor::decrypt(parentKeyName,childKey,CryptoKeyAlgoMap[parentKeyName]);
+    if (!BaseCryptoProcessor::unwrapKey("MASTER", parentKeyName)) {
+        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        ERR_print_errors_fp(stderr);
+        return "";
+    }
+    
+    std::string result =  BaseCryptoProcessor::decrypt(parentKeyName,childKey,CryptoKeyAlgoMap[parentKeyName]);
+
+    if (!BaseCryptoProcessor::wrapKey("MASTER", parentKeyName, wrapLog[parentKeyName])) {
+        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        ERR_print_errors_fp(stderr);
+    }
+
+    return result;
 }
 
 

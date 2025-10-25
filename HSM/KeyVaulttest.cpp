@@ -44,8 +44,8 @@ int main() {
     std::cout << "  Testing 'TestAES' data..." << std::endl;
     if (!check("  - Name matches", aesData.keyName == "TestAES")) allTestsPassed = false;
     if (!check("  - Algorithm matches", aesData.algorithm == "AES")) allTestsPassed = false;
-    if (!check("  - Private key is not empty", !aesData.privateKey.empty())) allTestsPassed = false;
-    if (!check("  - Public key is empty", aesData.publicKey.empty())) allTestsPassed = false;
+    if (!check("  - Private key is empty", aesData.privateKey.empty())) allTestsPassed = false;
+    if (!check("  - Public key is not empty", !aesData.publicKey.empty())) allTestsPassed = false;
     if (!check("  - Parent key is empty", aesData.parentKey.empty())) allTestsPassed = false;
 
     // Test RSA Key

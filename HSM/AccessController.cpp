@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stdexcept>
+#include <iostream>
 // No need for <openssl/sha.h> as EVP is now used
 
 AccessController::AccessController(const std::string& passwordFile, const std::string& userFile) {
@@ -23,6 +24,7 @@ void AccessController::loadPasswords(const std::string& filename) {
             passwordHashes[username] = hash;
         }
     }
+    std::cout << "Loagged all the passwords from " << filename << std::endl;
 }
 
 void AccessController::loadUsers(const std::string& filename) {

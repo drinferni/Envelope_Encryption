@@ -1,173 +1,105 @@
-Software HSM Implementation in C++ with OpenSSL
+# 🔐 Hardware Security Module (HSM) - Cloud KMS Emulator
 
-This project is a software simulation of a Hardware Security Module (HSM) that runs as a secure TLS server. It provides cryptographic functionalities like key generation, encryption, decryption, and signing over a network via a JSON-based API, while enforcing access control and managing the key lifecycle.
+This project implements a **software-based Hardware Security Module (HSM)** that emulates the core functionalities of HSMs used in major cloud Key Management Services (KMS) such as **AWS**, **Google Cloud**, and **Microsoft Azure**.
 
-Project Structure
+The system is modular and contains **three primary shared components** — `AccessController`, `KeyVault`, and `BaseCryptoProcessor` — which serve as the backbone for the three cloud integrations.
 
-The project is organized into several components, each represented by a C++ class:
+---
 
-AccessController: Manages user authentication and authorization.
+## 🧩 Components Overview
 
-KeyVault: Handles the secure storage and management of cryptographic keys.
+### 1. AccessController
+The **AccessController** class emulates the **IAM (Identity and Access Management)** policies used by cloud platforms to authenticate users and manage access control.
 
-CryptoEngine: Performs all cryptographic operations using OpenSSL.
+- **Authentication:**  
+  User authentication is performed using passwords. Each password is **hashed using SHA-256** to ensure confidentiality even if the stored data is compromised.
 
-HSM: The main class that orchestrates the different components and exposes the HSM's functionality.
+- **Access List Management:**  
+  Access permissions for each user are loaded from a **TSV (Tab-Separated Values)** file, which maps users to their allowed actions and resources.
 
-main.cpp: The entry point of the application, which runs the TLS server.
+---
 
-The project directory is structured as follows:
+### 2. KeyVault
+The **KeyVault** is the central component of the HSM and is responsible for securely managing cryptographic keys and their metadata.
 
-/HSM
-|-- AccessController.h
-|-- AccessController.cpp
-|-- KeyVault.h
-|-- KeyVault.cpp
-|-- CryptoEngine.h
-|-- CryptoEngine.cpp
-|-- HSM.h
-|-- HSM.cpp
-|-- main.cpp
-|-- users.tsv
-|-- passwords.tsv
-|-- cert.pem       <-- You will generate this
-|-- key.pem        <-- You will generate this
-|-- KeyFolder/
+- **Data Structure:**  
+  The vault defines a structure `KeyData`, which contains:
+  - `keyName` – the unique identifier for the key  
+  - `parentKey` – the key used to wrap this key  
+  - `publicKey` and `privateKey` – depending on the key type; for symmetric keys, `publicKey` stores the actual key material  
 
+- **Storage:**  
+  All keys and metadata are securely stored in a dedicated `storage/` directory managed by the `KeyVault` class.
 
-Configuration Files
+- **Key Management Capabilities:**  
+  - Generate and store **AES**, **RSA**, and **EC** keys.  
+  - Retrieve keys securely from the vault.  
+  - Delete all keys in case of a **physical breach** (emulating a real HSM’s zeroization behavior).  
 
-The HSM uses two TSV (Tab-Separated Values) files for configuration:
+- **Master Key:**  
+  The `KeyVault` maintains a **Master AES Key** which **never leaves the HSM**.  
+  This master key encrypts top-level keys (CMKs / KEKs / CryptoKeys):
+  - **AWS:** Customer Master Key (CMK)
+  - **Google Cloud:** CryptoKey
+  - **Azure:** Key Encrypting Key (KEK)
 
-passwords.tsv
+  This ensures all root cryptographic material is securely wrapped and never exposed in plaintext.
 
-This file stores user credentials. Each line represents a user with their username and the SHA-256 hash of their password, separated by a tab.
-Format: <username>\t<password_hash>
+---
 
-users.tsv
+### 3. BaseCryptoProcessor
+The **BaseCryptoProcessor** simulates the **dedicated cryptographic processor** within an HSM responsible for performing all cryptographic operations in isolation.
 
-This file defines the access control list, specifying which operations each user is permitted to perform.
-Format: <username>\t<permission1> <permission2> ...
+- **Integration with KeyVault:**  
+  Each processor instance holds a dedicated `KeyVault` object to access and manage cryptographic materials.
 
-How to Compile and Run
+- **Core Functionalities:**  
+  - **Wrap / Unwrap (AWS):**  
+    Wraps and unwraps keys using a parent key.  
+    Example: wrapping a child key under a parent CMK using AES-KW, AES-KWP, or RSA-OAEP.
 
-Prerequisites
+  - **Encrypt / Decrypt (Google Cloud):**  
+    Performs symmetric encryption/decryption operations on Key data directly using provided key material returning the result.
 
-A C++ compiler (g++)
+- **Supported Algorithms:**  
+  - **AES-KW (AES Key Wrap):**  
+    Wraps keys using AES in ECB mode with a fixed IV of `A6A6A6A6A6A6A6A6`.  
+    Provides integrity checking via a final authentication step.  
+  - **AES-KWP (AES Key Wrap with Padding):**  
+    Extension of AES-KW allowing keys of arbitrary length with padding.  
+  - **RSA-OAEP (Optimal Asymmetric Encryption Padding):**  
+    Uses RSA public/private key pairs with OAEP padding and typically SHA-1 or SHA-256 hash during encryption.
 
-OpenSSL library and headers installed (libssl-dev on Debian/Ubuntu)
+- **Wrap Log:**  
+  The processor maintains a **wrap log** recording which key wrapped which other key, enabling auditable traceability within the HSM.
 
-1. Generate TLS Certificate
+## 🧪 Testing
 
-First, you need to generate a self-signed certificate and a private key for the server to use for TLS. Run the following command:
+Unit tests and demonstration files are provided to validate:
 
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj "/CN=localhost"
+* User authentication and access control
+* Key creation, wrapping, and retrieval
+* Encryption and decryption functionality
+* Proper handling of zeroization events
 
+---
 
-This will create cert.pem and key.pem in your project directory.
+## ☁️ Cloud Integration
 
-2. Compilation
+Each cloud KMS (AWS, Google Cloud, and Azure) component interacts with the shared HSM classes to emulate their respective key lifecycle management processes:
 
-Compile the project using the following g++ command:
+* **AWS:** Key wrapping/unwrapping via CMKs using AES-KWP.
+* **Google Cloud:** Direct data encryption/decryption using CryptoKeys.
+* **Azure:** Key wrapping and key encryption hierarchy using KEKs.
 
-g++ main.cpp HSM.cpp AccessController.cpp KeyVault.cpp CryptoEngine.cpp -o hsm_server -lssl -lcrypto
+---
 
+## 📘 Summary
 
-3. Running the HSM Server
+This HSM emulator acts as a **trust anchor** for all cryptographic operations and key lifecycle management within the emulated cloud KMS environments. It demonstrates how hardware-backed security principles can be simulated in software for educational and experimental purposes.
 
-To run the HSM, execute the compiled binary:
-
-./hsm_server
-
-
-The server will start and listen for secure connections on port 8443.
-
-JSON API
-
-The server accepts requests in JSON format. All data for encryption, decryption, or signing must be Base64 encoded.
-
-API Commands
-
-Create Key
-
-Request:
-
-{
-  "command": "create-key",
-  "username": "admin",
-  "password": "your_password",
-  "key_name": "new-aes-key"
-}
-
-
-Response:
-
-{"status":"success","message":"Key created successfully.","data":""}
-
-
-Encrypt Data
-
-Request:
-
-{
-  "command": "encrypt",
-  "username": "user1",
-  "password": "user_password",
-  "key_name": "my-aes-key",
-  "data": "BASE64_ENCODED_PLAINTEXT"
-}
-
-
-Response:
-
-{"status":"success","message":"Data encrypted.","data":"BASE64_ENCODED_CIPHERTEXT"}
-
-
-Decrypt Data
-
-Request:
-
-{
-  "command": "decrypt",
-  "username": "user1",
-  "password": "user_password",
-  "key_name": "my-aes-key",
-  "data": "BASE64_ENCODED_CIPHERTEXT"
-}
-
-
-Response:
-
-{"status":"success","message":"Data decrypted.","data":"BASE64_ENCODED_PLAINTEXT"}
-
-
-Sign Data
-
-Request:
-
-{
-  "command": "sign",
-  "username": "admin",
-  "password": "your_password",
-  "key_name": "my-signing-key",
-  "data": "BASE64_ENCODED_DATA_TO_SIGN"
-}
-
-
-Response:
-
-{"status":"success","message":"Data signed.","data":"BASE64_ENCODED_SIGNATURE"}
-
-
-How to Connect (Example using OpenSSL)
-
-You can use the openssl s_client tool to connect to the server and send JSON requests.
-
-Start the server: ./hsm_server
-
-In another terminal, connect with s_client:
-
-openssl s_client -connect localhost:8443
-
-
-Once connected, paste your JSON request and press Enter twice. The server will process the request and send back a JSON response.
+---
+
+**Author:** Ansh Meshram
+**Language:** C++17
+**Dependencies:** OpenSSL, Standard C++ STL

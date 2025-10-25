@@ -32,6 +32,8 @@ AWSServer -> server interfact to conected to the server
 GoogleCloud ->  creating the heirarchy and versioning. encrypting data.
 GoogleCloud -> server interface to do it.
 
---
 Azure -> create a AzureHSM with only 1 key encryption (AES) (KEK is the master key of HSM) 
 
+--
+
+Azure disk encryption needs checking
