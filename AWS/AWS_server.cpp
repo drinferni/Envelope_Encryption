@@ -153,6 +153,8 @@ void handle_client(SSL* ssl, AccessController &ac, AWSHSM &hsm) {
         return;
     }
 
+    std::cout << "Request : " << req << std::endl;
+
     auto kv = parseSimpleJson(req);
 
     std::string username = kv.count("username") ? kv["username"] : "";
@@ -242,6 +244,8 @@ void handle_client(SSL* ssl, AccessController &ac, AWSHSM &hsm) {
             resp = makeJsonResponse("error", "unknown action");
         }
 
+        std::cout << "Response : " << resp << std::endl;
+
         SSL_write(ssl, resp.c_str(), resp.size());
     }
     catch (const std::exception &ex) {
@@ -278,15 +282,9 @@ int main(int argc, char **argv) {
     ac.loadPasswords(passwordFile);
     ac.loadUsers(usersFile);
 
-    // Initialize KeyVault and AWSHSM
-    // NOTE: adjust KeyVault constructor parameters to your implementation if necessary.
-    KeyVault kv("./KeyLocker"); // <-- If your KeyVault requires args, change this line.
+    KeyVault kv("./KeyLocker"); 
     AWSHSM hsm(kv, std::string(userCmkFile));
 
-    // Load HSM cmk-dek map (if AWSHSM loads on creation, it's fine)
-    // (awsHsm will call loadUserCmkMap/loadCmkDekMap internally in constructor)
-
-    // Create TCP socket, bind, listen (simple single-port server)
     int port = 8443;
     int sockfd = -1;
     {

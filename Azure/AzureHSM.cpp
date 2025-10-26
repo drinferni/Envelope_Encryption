@@ -77,21 +77,13 @@ AzureHSM::AzureHSM(KeyVault& vault, const std::string& userDEKFile)
 bool AzureHSM::generateDEK(const std::string& username, const std::string& DEKName, const std::string& wrapAlgorithm) {
     std::cout << "Attempting to generate DEK '" << DEKName << "' for user '" << username << "'..." << std::endl;
 
-    // 1. Validate algorithm
-    if (wrapAlgorithm != "AES-KWP" && wrapAlgorithm != "AES-KW") {
-        std::cerr << "Error: Invalid wrap algorithm. Must be 'AES-KWP' or 'AES-KW'." << std::endl;
-        return false;
-    }
 
-    // 2. Create the key in the vault (plaintext)
     if (!vault.createKey(DEKName, "AES")) {
         std::cerr << "Error: Could not create key '" << DEKName << "'. It may already exist." << std::endl;
         return false;
     }
 
-    // 3. Call BaseCryptoProcessor::wrapKey to wrap the new DEK with the master key.
-    // We pass "MASTER" as the parent key, which the vault will handle.
-    bool wrapSuccess = BaseCryptoProcessor::wrapKey("MASTER", DEKName, wrapAlgorithm);
+    bool wrapSuccess = BaseCryptoProcessor::wrapKey("MASTER", DEKName, "AES-KWP");
 
     if (!wrapSuccess) {
         std::cerr << "Error: Failed to wrap new DEK '" << DEKName << "' with master key." << std::endl;

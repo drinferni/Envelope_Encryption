@@ -79,6 +79,7 @@ void handle_client(SSL* ssl, AccessController &ac, GCHSM &hsm) {
     }
 
     auto kv = parseSimpleJson(req);
+    std::cout << "Request : " << req << std::endl;
     std::string username = kv.count("username") ? kv["username"] : "";
     std::string password = kv.count("password") ? kv["password"] : "";
     std::string action   = kv.count("action")   ? kv["action"]   : "";
@@ -93,47 +94,49 @@ void handle_client(SSL* ssl, AccessController &ac, GCHSM &hsm) {
         SSL_free(ssl);
         return;
     }
+    
+    std::string resp;
 
     try {
         if (action == "generateCryptoKey") {
             std::string wrapAlgo;
             bool ok = hsm.generateCryptoKey(username, keyname, algo, wrapAlgo);
-            std::string resp = ok ? makeJsonResponse("ok", "CryptoKey generated",{ {"wrapAlgo",wrapAlgo} }) 
+            resp = ok ? makeJsonResponse("ok", "CryptoKey generated",{ {"wrapAlgo",wrapAlgo} }) 
                                   : makeJsonResponse("error", "generateCryptoKey failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "encrypt") {
             std::string cipher = hsm.encrypt(username, keyname, childKey);
-            std::string resp = cipher.empty() ? makeJsonResponse("error","encrypt failed")
+            resp = cipher.empty() ? makeJsonResponse("error","encrypt failed")
                                               : makeJsonResponse("ok","encrypted",{ {"ciphertext",cipher} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "decrypt") {
             std::string plain = hsm.decrypt(username, keyname, childKey);
-            std::string resp = plain.empty() ? makeJsonResponse("error","decrypt failed")
+            resp = plain.empty() ? makeJsonResponse("error","decrypt failed")
                                             : makeJsonResponse("ok","decrypted",{ {"plaintext",plain} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "canUserAccessCryptoKey") {
             bool ok = hsm.canUserAccessCryptoKey(username,keyname);
-            std::string resp = makeJsonResponse("ok", "check result",{ {"allowed", ok ? "true":"false"} });
+            resp = makeJsonResponse("ok", "check result",{ {"allowed", ok ? "true":"false"} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "grantCryptoKeyAccess") {
             bool ok = hsm.grantCryptoKeyAccess(username,keyname);
-            std::string resp = makeJsonResponse("ok", ok ? "access granted" : "grant failed");
+            resp = makeJsonResponse("ok", ok ? "access granted" : "grant failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "getCryptoKeysForUser") {
             auto keys = hsm.getCryptoKeysForUser(username);
             std::ostringstream oss;
             for (size_t i=0;i<keys.size();++i) { if(i>0) oss << ","; oss << keys[i]; }
-            std::string resp = makeJsonResponse("ok","keys",{ {"cryptoKeys",oss.str()} });
+            resp = makeJsonResponse("ok","keys",{ {"cryptoKeys",oss.str()} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else {
-            std::string resp = makeJsonResponse("error","unknown action");
+            resp = makeJsonResponse("error","unknown action");
             SSL_write(ssl, resp.c_str(), resp.size());
         }
     } catch (const std::exception &ex) {
-        std::string resp = makeJsonResponse("error", std::string("exception: ") + ex.what());
+        resp = makeJsonResponse("error", std::string("exception: ") + ex.what());
         SSL_write(ssl, resp.c_str(), resp.size());
     }
-
+    std::cout << "Response : " << resp << std::endl;
     SSL_shutdown(ssl);
     SSL_free(ssl);
 }

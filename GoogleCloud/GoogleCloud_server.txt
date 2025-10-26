@@ -1,0 +1,118 @@
+Loaded existing master key from "./KeyLocker/master_key.key"
+Loading Wrap information
+GCHSM initialized. Loaded 1 user policies and 2 CryptoKey-Algo mappings.
+Loagged all the passwords from passwords.tsv
+Loaded all the users
+GCHSM server listening on port 8443
+Request : {"action":"generateCryptoKey","algo":"AES-KWP","keyname":"GCK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+Attempting to generate CryptoKey 'GCK1' for user 'alice'...
+Creating Key :GCK1
+Response : {"status":"error","message":"generateCryptoKey failed"}
+Request : {"action":"encrypt","childKey":"a152c6e1a33ad02d2160b6ce5fe7af63","keyname":"GCK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK1'.
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully unwrapped key 'GCK1'.
+Getting Key :GCK1
+Sucessfully encrypted a152c6e1a33ad02d2160b6ce5fe7af63 with  GCK1
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully wrapped key 'GCK1' with 'MASTER' using AES-KWP.
+Wrapped Key : a152c6e1a33ad02d2160b6ce5fe7af63 using Key : GCK1
+Response : {"status":"ok","message":"encrypted","ciphertext":"313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00"}
+Request : {"action":"encrypt","childKey":"a976f723f1d8b5c12868aaceefb77284","keyname":"GCK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK1'.
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully unwrapped key 'GCK1'.
+Getting Key :GCK1
+Sucessfully encrypted a976f723f1d8b5c12868aaceefb77284 with  GCK1
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully wrapped key 'GCK1' with 'MASTER' using AES-KWP.
+Wrapped Key : a976f723f1d8b5c12868aaceefb77284 using Key : GCK1
+Response : {"status":"ok","message":"encrypted","ciphertext":"9486aad17922c7ea5d0c148ed4ed2eefc6258fdb7ffc4dad"}
+Request : {"action":"decrypt","childKey":"313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00","keyname":"GCK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK1'.
+To decrypt 313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully unwrapped key 'GCK1'.
+Getting Key :GCK1
+decoding313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00
+Decoding Complete
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK1
+Successfully wrapped key 'GCK1' with 'MASTER' using AES-KWP.
+Unwrapped Key : 313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00 using Key : GCK1
+Response : {"status":"ok","message":"decrypted","plaintext":"a152c6e1a33ad02d2160b6ce5fe7af63"}
+Request : {"action":"generateCryptoKey","algo":"AES-KW","keyname":"GCK2","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+Attempting to generate CryptoKey 'GCK2' for user 'alice'...
+Creating Key :GCK2
+Response : {"status":"error","message":"generateCryptoKey failed"}
+Request : {"action":"encrypt","childKey":"641a6993e20b9a2e9026b2fab46ac458","keyname":"GCK2","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK2'.
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully unwrapped key 'GCK2'.
+Getting Key :GCK2
+Sucessfully encrypted 641a6993e20b9a2e9026b2fab46ac458 with  GCK2
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully wrapped key 'GCK2' with 'MASTER' using AES-KW.
+Wrapped Key : 641a6993e20b9a2e9026b2fab46ac458 using Key : GCK2
+Response : {"status":"ok","message":"encrypted","ciphertext":"a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de"}
+Request : {"action":"encrypt","childKey":"90d507a99bf912333877f0ad16d97bc2","keyname":"GCK2","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK2'.
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully unwrapped key 'GCK2'.
+Getting Key :GCK2
+Sucessfully encrypted 90d507a99bf912333877f0ad16d97bc2 with  GCK2
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully wrapped key 'GCK2' with 'MASTER' using AES-KW.
+Wrapped Key : 90d507a99bf912333877f0ad16d97bc2 using Key : GCK2
+Response : {"status":"ok","message":"encrypted","ciphertext":"021556833e0fb9cb70c0fda23e0e9ca2188be799d7831977"}
+Request : {"action":"decrypt","childKey":"a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de","keyname":"GCK2","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'GCK2'.
+To decrypt a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully unwrapped key 'GCK2'.
+Getting Key :GCK2
+decodinga4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de
+Decoding Complete
+Getting Key :MASTER
+getting Master Key
+Getting Key :GCK2
+Successfully wrapped key 'GCK2' with 'MASTER' using AES-KW.
+Unwrapped Key : a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de using Key : GCK2
+Response : {"status":"ok","message":"decrypted","plaintext":"641a6993e20b9a2e9026b2fab46ac458"}

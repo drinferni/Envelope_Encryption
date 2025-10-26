@@ -1,0 +1,86 @@
+--- Initializing Crypto Processor Test ---
+Generating new master key...
+Saved new master key to "./CryptoProcessorTestLocker/master_key.key"
+Loading Wrap information
+Wrap log not found. Will create a new one.
+
+Zeroizing all keys in ./CryptoProcessorTestLocker...
+Vault contents deleted.
+Vault directory recreated.
+Generating new master key...
+Saved new master key to "./CryptoProcessorTestLocker/master_key.key"
+
+--- 1. Creating Test Keys ---
+Creating Key :WrapParentAES
+Successfully created key: WrapParentAES
+  [Test] Create 'WrapParentAES': PASSED
+Creating Key :WrapParentRSA
+Successfully created key: WrapParentRSA
+  [Test] Create 'WrapParentRSA': PASSED
+Creating Key :WrapParentEC
+Successfully created key: WrapParentEC
+  [Test] Create 'WrapParentEC': PASSED
+Creating Key :Child_for_KWP
+Successfully created key: Child_for_KWP
+  [Test] Create 'Child_for_KWP': PASSED
+Creating Key :Child_for_KW
+Successfully created key: Child_for_KW
+  [Test] Create 'Child_for_KW': PASSED
+Creating Key :Child_for_RSA
+Successfully created key: Child_for_RSA
+  [Test] Create 'Child_for_RSA': PASSED
+Creating Key :Child_for_EC
+Successfully created key: Child_for_EC
+  [Test] Create 'Child_for_EC': PASSED
+
+--- 2. Storing Original Plaintext Keys ---
+Getting Key :Child_for_KWP
+Getting Key :Child_for_KW
+Getting Key :Child_for_RSA
+Getting Key :Child_for_EC
+  [Test] Got original KWP key: PASSED
+  [Test] Got original KW key: PASSED
+  [Test] Got original RSA key: PASSED
+  [Test] Got original EC key: PASSED
+  Original KW Key (first 8): c0db53a2...
+
+--- 3. Testing Key Wrapping (Encryption) ---
+Getting Key :WrapParentAES
+Getting Key :Child_for_KWP
+Successfully wrapped key 'Child_for_KWP' with 'WrapParentAES' using AES-KWP.
+  [Test] Wrap (AES-KWP): PASSED
+Getting Key :WrapParentAES
+Getting Key :Child_for_KW
+Successfully wrapped key 'Child_for_KW' with 'WrapParentAES' using AES-KW.
+  [Test] Wrap (AES-KW): PASSED
+Getting Key :WrapParentRSA
+Sucessfully encrypted aacb9646f17b7e1dca185e10d6ed610aaf3988540fec83f7173b0636f79d94d4 with  WrapParentRSA
+Getting Key :WrapParentRSA
+decoding9bf966c853ce1c56d1f8d2da9409d15e9e2927fd61ecb3578723fc985d8959f4c75cad77db2ccfcf1f665b65aa14bfd95912508771cfca3ace5860a19d3eba32e461eef3f53ab167de95d057b8d1d45bc37f3b456a63e449ab80df80899c44c1b0ef45873c637c43b569df6b6aee347cfa4f7f373fb5fb32f99d4410132065c4eb79c2237ad0964e5902824f01f8bd7e81c0f7acdfe4c23542b6bd1b64c0890be8e8568a40f8b066afd49a4ae2342f80e7668af5512a425c75a977cd57aa054a77eb17914863c0e3f2c38f9739df86222f28f82f7bac2884727c995de9962cf1b8163aee79eb018686272ae92f760dc83e32a264cf79938b97e9a9aca1b00209
+Decoding Complete
+  [Test] Wrap (RSA-OAEP): PASSED
+
+--- 4. Verifying Wrapped Key on Disk ---
+Getting Key :Child_for_KW
+  [Test] Wrapped key on disk is different from original: PASSED
+  [Test] Wrapped key parent is correctly set: PASSED
+  Wrapped KW Key (first 8): 7a7196b7...
+
+--- 6. Testing Failure Cases ---
+Getting Key :NonExistentKey
+Getting Key :Child_for_KWP
+  [Test] Wrap with non-existent parent: PASSED
+Getting Key :WrapParentAES
+Getting Key :NonExistentKey
+  [Test] Wrap non-existent child: PASSED
+Getting Key :WrapParentRSA
+Getting Key :Child_for_KWP
+  [Test] Wrap with wrong parent type (RSA parent, AES algo): PASSED
+  [Test] Unwrap non-existent child: PASSED
+Getting Key :WrapParentRSA
+Getting Key :Child_for_KWP
+  [Test] Unwrap with wrong parent (RSA key, AES-KWP log): PASSED
+
+--- Final Summary ---
+All Crypto Processor Tests PASSED.
+-----------------------

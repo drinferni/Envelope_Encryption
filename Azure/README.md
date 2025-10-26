@@ -91,3 +91,98 @@ The project includes a `Makefile` and `envgen` script.
 * Implements **access control and key management** per user.
 
 
+## 🧩 Creating and Managing a Virtual Disk Using `/dev/loop`
+
+This section describes how to create a virtual block device using Linux loopback (`/dev/loopX`) devices.
+Loop devices allow you to use a regular file as a virtual disk — useful for testing filesystems, disk encryption, or HSM emulation without touching real hardware.
+
+---
+
+### ⚙️ 1. Create a Virtual Disk Image
+
+Create a blank image file that will act as the virtual disk:
+
+```bash
+sudo dd if=/dev/zero of=disk.img bs=1M count=100
+```
+
+* `if=/dev/zero` → source of zeroed bytes
+* `of=disk.img` → output image file
+* `bs=1M count=100` → creates a 100 MB file (adjust as needed)
+
+---
+
+### 🧲 2. Attach the Image to a Loop Device
+
+Instead of manually choosing `/dev/loop0`, let the system assign a free loop device automatically:
+
+```bash
+sudo losetup -fP disk.img
+```
+
+This command:
+
+* Finds the first available loop device
+* Attaches `disk.img` to it
+* Scans for partitions (via `-P`)
+
+To verify the mapping:
+
+```bash
+sudo losetup -a
+```
+
+---
+
+### 🧱 3. Format the Virtual Disk
+
+Once attached, format it with your desired filesystem (for example, `ext4`):
+
+```bash
+sudo mkfs.ext4 /dev/loopX
+```
+
+*(Replace `loopX` with the actual loop device name, such as `loop0` or `loop1`.)*
+
+---
+
+### 📂 4. Mount the Virtual Disk
+
+Mount the newly formatted device to access it as a normal filesystem:
+
+```bash
+sudo mkdir /mnt/loopdisk
+sudo mount /dev/loopX /mnt/loopdisk
+```
+
+You can now read/write files under `/mnt/loopdisk` just like any other mounted drive.
+
+---
+
+### 🔍 5. Check the Status of Loop Devices
+
+To see all active loop devices and their backing files:
+
+```bash
+sudo losetup -a
+```
+
+To view mount points:
+
+```bash
+mount | grep loop
+```
+
+---
+
+### 🧹 6. Unmount and Detach the Virtual Disk
+
+When done, unmount and detach the loop device:
+
+```bash
+sudo umount /mnt/loopdisk
+sudo losetup -d /dev/loopX
+```
+
+This frees up the loop device for future use.
+

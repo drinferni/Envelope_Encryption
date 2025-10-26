@@ -1,0 +1,12 @@
+Sending Request: {"action":"generateDEK","keyname":"myDEK","password":"alice123","username":"alice"}
+Response Got: {"status":"ok","message":"DEK generated"}
+generateDEK: {"status":"ok","message":"DEK generated"}
+Sending Request: {"action":"encryptVolume","device":"/dev/loop0","keyname":"myDEK","password":"alice123","username":"alice"}
+Response Got: {"status":"ok","message":"volume encrypted"}
+encryptVolume: {"status":"ok","message":"volume encrypted"}
+Sending Request: {"action":"openVolume","device":"/dev/loop0","keyname":"myDEK","mapping":"secure-disk","password":"alice123","username":"alice"}
+Response Got: {"status":"ok","message":"volume opened"}
+openVolume: {"status":"ok","message":"volume opened"}
+Sending Request: {"action":"closeVolume","mapping":"secure-disk","password":"alice123","username":"alice"}
+Response Got: {"status":"ok","message":"volume closed"}
+closeVolume: {"status":"ok","message":"volume closed"}

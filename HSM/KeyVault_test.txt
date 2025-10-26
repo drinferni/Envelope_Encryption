@@ -1,0 +1,74 @@
+--- Starting Key Vault Test ---
+Using vault path: TestKeyLocker
+
+--- 1. Initialization ---
+Generating new master key...
+Saved new master key to "TestKeyLocker/master_key.key"
+getting Master Key
+  [TEST] Master Key 1 is not empty... PASSED
+  Master Key 1 (first 8 chars): e5e0ac5c...
+
+--- 2. Creating Keys ---
+Creating Key :TestAES
+Successfully created key: TestAES
+  [TEST] Create 'TestAES'... PASSED
+Creating Key :TestRSA
+Successfully created key: TestRSA
+  [TEST] Create 'TestRSA'... PASSED
+Creating Key :TestEC
+Successfully created key: TestEC
+  [TEST] Create 'TestEC'... PASSED
+Creating Key :ChildAES
+Successfully created key: ChildAES
+  [TEST] Create 'ChildAES' with parent 'TestAES'... PASSED
+
+--- 3. Getting Keys and Comparing ---
+Getting Key :TestAES
+  Testing 'TestAES' data...
+  [TEST]   - Name matches... PASSED
+  [TEST]   - Algorithm matches... PASSED
+  [TEST]   - Private key is empty... PASSED
+  [TEST]   - Public key is not empty... PASSED
+  [TEST]   - Parent key is empty... PASSED
+Getting Key :TestRSA
+  Testing 'TestRSA' data...
+  [TEST]   - Name matches... PASSED
+  [TEST]   - Algorithm matches... PASSED
+  [TEST]   - Private key is not empty... PASSED
+  [TEST]   - Public key is not empty... PASSED
+Getting Key :TestEC
+  Testing 'TestEC' data...
+  [TEST]   - Name matches... PASSED
+  [TEST]   - Algorithm matches... PASSED
+  [TEST]   - Private key is not empty... PASSED
+  [TEST]   - Public key is not empty... PASSED
+Getting Key :ChildAES
+  Testing 'ChildAES' data...
+  [TEST]   - Name matches... PASSED
+  [TEST]   - Algorithm matches... PASSED
+  [TEST]   - Parent key matches 'TestAES'... PASSED
+
+--- 4. Testing Failure Cases ---
+Creating Key :TestAES
+  [TEST] Duplicate key creation fails... PASSED
+Getting Key :NonExistentKey
+  [TEST] Get non-existent key returns empty struct... PASSED
+
+--- 5. Zeroizing Vault ---
+
+Zeroizing all keys in TestKeyLocker...
+Vault contents deleted.
+Vault directory recreated.
+Generating new master key...
+Saved new master key to "TestKeyLocker/master_key.key"
+getting Master Key
+  Master Key 2 (first 8 chars): c1ac222b...
+  [TEST] Master Key 2 is not empty... PASSED
+  [TEST] Master Key 2 is different from Master Key 1... PASSED
+Getting Key :TestAES
+  [TEST] Key 'TestAES' is gone after zeroize... PASSED
+
+--- Test Summary ---
+RESULT: All tests PASSED!
+----------------------
+Cleaning up test directory...

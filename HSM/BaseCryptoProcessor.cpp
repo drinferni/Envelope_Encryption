@@ -31,6 +31,9 @@ BaseCryptoProcessor::BaseCryptoProcessor(KeyVault& v) : vault(v) {
 }
 
 void BaseCryptoProcessor::loadWrapLog() {
+
+    std::cout << "Loading Wrap information" << std::endl;
+
     std::ifstream logFile(this->logFilePath);
     if (!logFile) {
         std::cout << "Wrap log not found. Will create a new one." << std::endl;
@@ -421,6 +424,8 @@ std::string BaseCryptoProcessor::encrypt(const std::string& parentKeyName , cons
         ERR_print_errors_fp(stderr);
         return "";
     }
+
+    std::cout << "Sucessfully encrypted " << childKey << " with  " << parentKeyName << std::endl;
 
    return finalPayload;
 

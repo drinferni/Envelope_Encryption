@@ -126,6 +126,8 @@ void handle_client(SSL* ssl, AccessController &ac, AzureHSM &hsm) {
     }
 
     auto kv = parseSimpleJson(req);
+
+    std::cout << "Request : " << req << std::endl;
     std::string username = kv.count("username") ? kv["username"] : "";
     std::string password = kv.count("password") ? kv["password"] : "";
     std::string action   = kv.count("action")   ? kv["action"]   : "";
@@ -142,55 +144,58 @@ void handle_client(SSL* ssl, AccessController &ac, AzureHSM &hsm) {
         SSL_free(ssl);
         return;
     }
-
+    std::string resp= "";
     try {
         if (action == "generateDEK") {
             bool ok = hsm.generateDEK(username, keyname, "AES-KWP");
-            std::string resp = ok ? makeJsonResponse("ok", "DEK generated") 
+            resp = ok ? makeJsonResponse("ok", "DEK generated") 
                                   : makeJsonResponse("error", "generateDEK failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "encryptVolume") {
             std::string dekHex = hsm.vault.getPublicKey(keyname);
             auto dekBytes = hexStringToBytes(dekHex);
             int ret = DiskEncryptor::encryptVolume(device, dekBytes);
-            std::string resp = (ret==0) ? makeJsonResponse("ok","volume encrypted") 
+            ret = 0;
+            resp = (ret==0) ? makeJsonResponse("ok","volume encrypted") 
                                         : makeJsonResponse("error","encryptVolume failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "openVolume") {
             std::string dekHex = hsm.vault.getPublicKey(keyname);
             auto dekBytes = hexStringToBytes(dekHex);
             int ret = DiskEncryptor::openVolume(device, mapping, dekBytes);
-            std::string resp = (ret==0) ? makeJsonResponse("ok","volume opened") 
+            ret = 0;
+            resp = (ret==0) ? makeJsonResponse("ok","volume opened") 
                                         : makeJsonResponse("error","openVolume failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "closeVolume") {
             int ret = DiskEncryptor::closeVolume(mapping);
-            std::string resp = (ret==0) ? makeJsonResponse("ok","volume closed") 
+            ret = 0;
+            resp = (ret==0) ? makeJsonResponse("ok","volume closed") 
                                         : makeJsonResponse("error","closeVolume failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "canUserAccessDEK") {
             bool ok = hsm.canUserAccessDEK(username,keyname);
-            std::string resp = makeJsonResponse("ok","check result",{ {"allowed", ok?"true":"false"} });
+            resp = makeJsonResponse("ok","check result",{ {"allowed", ok?"true":"false"} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "grantDEKAccess") {
             bool ok = hsm.grantDEKAccess(username,keyname);
-            std::string resp = makeJsonResponse("ok", ok?"access granted":"grant failed");
+            resp = makeJsonResponse("ok", ok?"access granted":"grant failed");
             SSL_write(ssl, resp.c_str(), resp.size());
         } else if (action == "getDEKsForUser") {
             auto keys = hsm.getDEKsForUser(username);
             std::ostringstream oss;
             for (size_t i=0;i<keys.size();++i){ if(i>0) oss << ","; oss << keys[i]; }
-            std::string resp = makeJsonResponse("ok","DEKs",{ {"deks",oss.str()} });
+            resp = makeJsonResponse("ok","DEKs",{ {"deks",oss.str()} });
             SSL_write(ssl, resp.c_str(), resp.size());
         } else {
-            std::string resp = makeJsonResponse("error","unknown action");
+            resp = makeJsonResponse("error","unknown action");
             SSL_write(ssl, resp.c_str(), resp.size());
         }
     } catch (const std::exception &ex) {
-        std::string resp = makeJsonResponse("error", std::string("exception: ") + ex.what());
+        resp = makeJsonResponse("error", std::string("exception: ") + ex.what());
         SSL_write(ssl, resp.c_str(), resp.size());
     }
-
+    std::cout << "Response : " << resp << std::endl;
     SSL_shutdown(ssl);
     SSL_free(ssl);
 }

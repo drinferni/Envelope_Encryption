@@ -100,6 +100,8 @@ bool AWSHSM::wrapKey(const std::string& username, const std::string& parentKeyNa
              saveCmkDekMap();
         }
     }
+
+    std::cout << "Key : " << childKeyName << " sucessfully wrapped by Key :" << parentKeyName << " using algorithm " << algorithm << std::endl;
     
     return wrapSuccess;
 }
@@ -120,6 +122,9 @@ std::string AWSHSM::unwrapKey(const std::string& username, const std::string& pa
 
     BaseCryptoProcessor::wrapKey(parentKeyName,childKeyName,wrapLog[childKeyName]);
 
+
+    std::cout << "Key : " << childKeyName << " sucessfully unwrapped by Key :" << parentKeyName << " using algorithm " << wrapLog[childKeyName] << std::endl;
+
     return decryptedKey;
 
 }
@@ -139,6 +144,7 @@ DataKey AWSHSM::internalGenerateAndWrap(const std::string& cmkName, const std::s
         std::cerr << "internalGenerateAndWrap: Failed to create temp DEK '" << dekName << "' of type '" << dekAlgorithm << "'." << std::endl;
         return {"", ""};
     }
+    std::cout << "Generated Key :" << dekName << std::endl;
 
     // 3. Get the plaintext DEK before it gets wrapped (to return to the user)
     KeyData dek_plaintext_data = vault.getKey(dekName);
@@ -150,20 +156,16 @@ DataKey AWSHSM::internalGenerateAndWrap(const std::string& cmkName, const std::s
     // Get the raw plaintext (private key for AES/EC/RSA)
     std::string dekPlaintext_raw = dek_plaintext_data.publicKey;
 
+    std::cout << "Unwraping CMK" << std::endl;
+
     if (!BaseCryptoProcessor::unwrapKey("MASTER", cmkName)) {
         std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);
         return {"", ""};
     }
 
+    std::cout << "Wrapping DEK" << std::endl;
 
-    // 4. ***REVERTED LOGIC***:
-    // Call BaseCryptoProcessor::wrapKey. This function will automatically:
-    // 1. Load the CMK (cmkName).
-    // 2. See it's wrapped by "MASTER".
-    // 3. Call its *own* unwrapKey("MASTER", cmkName) to get the CMK plaintext.
-    // 4. Use the CMK plaintext to wrap the DEK (dekName).
-    // 5. Save the new ciphertext back into the dekName's key file.
     if (!BaseCryptoProcessor::wrapKey(cmkName, dekName, wrapAlgorithm)) {
         std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);

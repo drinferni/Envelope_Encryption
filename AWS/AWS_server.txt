@@ -1,0 +1,117 @@
+Loagged all the passwords from passwords.tsv
+Loaded all the users
+Loagged all the passwords from passwords.tsv
+Loaded all the users
+Generating new master key...
+Saved new master key to "./KeyLocker/master_key.key"
+Loading Wrap information
+Wrap log not found. Will create a new one.
+Policy file not found: ./KeyLocker/cmk_map.txt. A new file will be created on save.
+Policy file not found: ./KeyLocker/cmk_dek_map.txt. A new file will be created on save.
+AWSHSM initialized. Loaded 0 user policies and 0 CMK-DEK mappings.
+SSL server listening on port 8443
+Request : {"action":"generateCMK","cmk":"CMK1","password":"alice123","username":"alice","wrap":"AES-KWP"}
+Authentication :alice
+Hashing password
+Attempting to generate CMK 'CMK1' for user 'alice'...
+Creating Key :CMK1
+Successfully created key: CMK1
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully wrapped key 'CMK1' with 'MASTER' using AES-KWP.
+Getting Key :CMK1
+Grant: Adding new user 'alice' to policy.
+Grant: Access for 'alice' to 'CMK1' saved.
+Successfully generated and wrapped CMK 'CMK1', granting access to 'alice'.
+Response : {"status":"ok","message":"generated CMK"}
+
+Request : {"action":"generateDataKey","cmk":"CMK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'CMK1'.
+Creating Key :temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+Successfully created key: temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+Generated Key :temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+Getting Key :temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+Unwraping CMK
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully unwrapped key 'CMK1'.
+Wrapping DEK
+Getting Key :CMK1
+Getting Key :temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+Successfully wrapped key 'temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df' with 'CMK1' using AES-KWP.
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully wrapped key 'CMK1' with 'MASTER' using AES-KWP.
+Getting Key :temp_dek_622f4bdd5e9c49cc5b6faf34aa4e42df
+DEK generated
+3465656131646534646562663963613735333962376136326632623062626134353161393563636563653830343364323861346234316237653937336631306138393565316261333061343433363530 31366134633831666665623731623838393530633434333031626136636236666438626438353738626233323631643537333132346266656566663132363131
+Response : {"status":"ok","message":"generated data key","data":{"ciphertextHex":"3465656131646534646562663963613735333962376136326632623062626134353161393563636563653830343364323861346234316237653937336631306138393565316261333061343433363530","plaintextHex":"31366134633831666665623731623838393530633434333031626136636236666438626438353738626233323631643537333132346266656566663132363131"}}
+
+Request : {"action":"generateDataKeyWithoutPlaintext","cmk":"CMK1","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+AuthZ Success: User 'alice' authorized for CMK 'CMK1'.
+Creating Key :temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+Successfully created key: temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+Generated Key :temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+Getting Key :temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+Unwraping CMK
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully unwrapped key 'CMK1'.
+Wrapping DEK
+Getting Key :CMK1
+Getting Key :temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+Successfully wrapped key 'temp_dek_fa592eedb1d35e139a6e5455d0d9ad69' with 'CMK1' using AES-KWP.
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully wrapped key 'CMK1' with 'MASTER' using AES-KWP.
+Getting Key :temp_dek_fa592eedb1d35e139a6e5455d0d9ad69
+DEK generated
+Response : {"status":"ok","message":"generated ciphertext-only data key","data":{"ciphertextHex":"3432623132393737623432396433393964333036653837663732376431316566366565376664636163396132316232323530343833376235393831663633666132623637636634386137396132663833"}}
+
+Request : {"action":"grantCmkAccess","cmk":"CMK1","password":"alice123","username":"alice","wrap":"bob"}
+Authentication :alice
+Hashing password
+Grant: Adding new user 'bob' to policy.
+Grant: Access for 'bob' to 'CMK1' saved.
+Response : {"status":"ok","message":"granted CMK access"}
+
+Request : {"action":"generateDataKey","cmk":"CMK1","password":"bob123","username":"bob"}
+Authentication :bob
+Hashing password
+AuthZ Success: User 'bob' authorized for CMK 'CMK1'.
+Creating Key :temp_dek_334cd6418d3259a68c57280b46e14ec0
+Successfully created key: temp_dek_334cd6418d3259a68c57280b46e14ec0
+Generated Key :temp_dek_334cd6418d3259a68c57280b46e14ec0
+Getting Key :temp_dek_334cd6418d3259a68c57280b46e14ec0
+Unwraping CMK
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully unwrapped key 'CMK1'.
+Wrapping DEK
+Getting Key :CMK1
+Getting Key :temp_dek_334cd6418d3259a68c57280b46e14ec0
+Successfully wrapped key 'temp_dek_334cd6418d3259a68c57280b46e14ec0' with 'CMK1' using AES-KWP.
+Getting Key :MASTER
+getting Master Key
+Getting Key :CMK1
+Successfully wrapped key 'CMK1' with 'MASTER' using AES-KWP.
+Getting Key :temp_dek_334cd6418d3259a68c57280b46e14ec0
+DEK generated
+3663343862663062346530333863383065653563616534656237373763386162376462646139323832326364393861306336336131663732353732613533366532303965316166383964383765363535 39613461663630323935326463386663373866353162653336386266353139656231623064613631663638373563613561323239353265623236373437393064
+Response : {"status":"ok","message":"generated data key","data":{"ciphertextHex":"3663343862663062346530333863383065653563616534656237373763386162376462646139323832326364393861306336336131663732353732613533366532303965316166383964383765363535","plaintextHex":"39613461663630323935326463386663373866353162653336386266353139656231623064613631663638373563613561323239353265623236373437393064"}}
+
+Request : {"action":"getCmksForUser","password":"alice123","username":"alice"}
+Authentication :alice
+Hashing password
+Response : {"status":"ok","message":"cmks listed for user","data":{"cmks":"CMK1"}}
+

@@ -1,0 +1,34 @@
+Request : {"action":"generateCryptoKey","algo":"AES-KWP","keyname":"GCK1","password":"alice123","username":"alice"}
+
+generateCryptoKey AES-KWP: {"status":"error","message":"generateCryptoKey failed"}
+Request : {"action":"encrypt","childKey":"a152c6e1a33ad02d2160b6ce5fe7af63","keyname":"GCK1","password":"alice123","username":"alice"}
+
+encrypt DEK1 AES-KWP: {"status":"ok","message":"encrypted","ciphertext":"313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00"}
+Request : {"action":"encrypt","childKey":"a976f723f1d8b5c12868aaceefb77284","keyname":"GCK1","password":"alice123","username":"alice"}
+
+encrypt DEK2 AES-KWP: {"status":"ok","message":"encrypted","ciphertext":"9486aad17922c7ea5d0c148ed4ed2eefc6258fdb7ffc4dad"}
+Request : {"action":"decrypt","childKey":"313728cfb1bef554b0295c40d712f207b21fe1172c1c1c00","keyname":"GCK1","password":"alice123","username":"alice"}
+
+decrypt DEK1 AES-KWP from ciphertext: {"status":"ok","message":"decrypted","plaintext":"a152c6e1a33ad02d2160b6ce5fe7af63"}
+
+Verification AES-KWP:
+Original DEK1: a152c6e1a33ad02d2160b6ce5fe7af63
+Decrypted DEK1: a152c6e1a33ad02d2160b6ce5fe7af63
+✅ DEK1 AES-KWP matches!
+Request : {"action":"generateCryptoKey","algo":"AES-KW","keyname":"GCK2","password":"alice123","username":"alice"}
+
+generateCryptoKey RSA-OAEP: {"status":"error","message":"generateCryptoKey failed"}
+Request : {"action":"encrypt","childKey":"641a6993e20b9a2e9026b2fab46ac458","keyname":"GCK2","password":"alice123","username":"alice"}
+
+encrypt DEK1 RSA-OAEP: {"status":"ok","message":"encrypted","ciphertext":"a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de"}
+Request : {"action":"encrypt","childKey":"90d507a99bf912333877f0ad16d97bc2","keyname":"GCK2","password":"alice123","username":"alice"}
+
+encrypt DEK2 RSA-OAEP: {"status":"ok","message":"encrypted","ciphertext":"021556833e0fb9cb70c0fda23e0e9ca2188be799d7831977"}
+Request : {"action":"decrypt","childKey":"a4913276cdf247448f2cfefc299b107b6c682e9a3dd6f6de","keyname":"GCK2","password":"alice123","username":"alice"}
+
+decrypt DEK1 RSA-OAEP from ciphertext: {"status":"ok","message":"decrypted","plaintext":"641a6993e20b9a2e9026b2fab46ac458"}
+
+Verification RSA-OAEP:
+Original DEK1: 641a6993e20b9a2e9026b2fab46ac458
+Decrypted DEK1: 641a6993e20b9a2e9026b2fab46ac458
+✅ DEK1 RSA-OAEP matches!

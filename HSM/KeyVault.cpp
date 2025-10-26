@@ -18,11 +18,6 @@
 // Make filesystem namespace easier to use
 namespace fs = std::filesystem;
 
-// --- OpenSSL Helper Functions ---
-
-
-// --- End OpenSSL Helper Functions ---
-
 
 /**
  * @brief Helper function to read a file's entire content into a string.
@@ -180,6 +175,7 @@ void KeyVault::initializeMasterKey() {
  * @brief Returns the master AES key.
  */
 std::string KeyVault::getMasterKey() const {
+    std::cout << "getting Master Key" << std::endl;
     return this->masterKey;
 }
 
@@ -187,6 +183,7 @@ std::string KeyVault::getMasterKey() const {
  * @brief Creates a new key, storing it in its own subdirectory.
  */
 bool KeyVault::createKey(const std::string& keyName, const std::string& algorithm, const std::string& parentKeyName) {
+    std::cout << "Creating Key :" << keyName << std::endl;
     fs::path keyPath = fs::path(storagePath) / keyName;
 
     // Check for duplicates
@@ -301,6 +298,8 @@ bool KeyVault::createKey(const std::string& keyName, const std::string& algorith
  * @brief Retrieves a key's data from the vault (including private key material).
  */
 KeyData KeyVault::getKey(const std::string& keyName) const {
+
+    std::cout << "Getting Key :" << keyName << std::endl;
 
     if (keyName == "MASTER") {
         KeyData mk;

@@ -74,6 +74,8 @@ std::string sendRequest(const std::string& host, int port, const std::map<std::s
     }
 
     std::string reqStr = makeJsonRequest(req) + "\n";
+
+    std::cout << "Sending Request :" << reqStr ;
     SSL_write(ssl, reqStr.c_str(), reqStr.size());
 
     char buf[4096];
@@ -85,6 +87,8 @@ std::string sendRequest(const std::string& host, int port, const std::map<std::s
     buf[n] = '\0';
     std::string resp(buf);
     ssl_disconnect(ssl);
+
+    std::cout << "Response Got : " << resp << std::endl;
     return resp;
 }
 

@@ -65,6 +65,7 @@ std::string sendRequest(const std::string &host, int port, const std::map<std::s
         return "SSL connection failed";
 
     std::string reqStr = makeJsonRequest(req) + "\n";
+    std::cout << "Request : " << reqStr << std::endl;
     SSL_write(ssl, reqStr.c_str(), reqStr.size());
 
     char buf[4096];

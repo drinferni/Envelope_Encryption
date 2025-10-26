@@ -39,11 +39,6 @@ static std::vector<unsigned char> internal_hexDecode(const std::string& hexStr) 
 }
 
 
-
-
-
-
-
 /**
  * @brief Constructor
  * Initializes file paths and loads the policy maps from disk.
@@ -76,7 +71,7 @@ std::string GCHSM::encrypt(const std::string& username, const std::string& paren
     std::cout << "AuthZ Success: User '" << username << "' authorized for CMK '" << parentKeyName << "'." << std::endl;
 
     if (!BaseCryptoProcessor::unwrapKey("MASTER", parentKeyName)) {
-        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        std::cerr << "unwrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);
         return "";
     }
@@ -84,9 +79,11 @@ std::string GCHSM::encrypt(const std::string& username, const std::string& paren
     std::string result = BaseCryptoProcessor::encrypt(parentKeyName,childkey,CryptoKeyAlgoMap[parentKeyName]);
 
     if (!BaseCryptoProcessor::wrapKey("MASTER", parentKeyName, wrapLog[parentKeyName])) {
-        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        std::cerr << "wrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);
     }
+
+    std::cout << "Wrapped Key : " << childkey << " using Key : " << parentKeyName << std::endl;
 
     return result;
 }
@@ -102,7 +99,7 @@ std::string GCHSM::decrypt(const std::string& username, const std::string& paren
     std::cout << "To decrypt " << childKey << std::endl;
 
     if (!BaseCryptoProcessor::unwrapKey("MASTER", parentKeyName)) {
-        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        std::cerr << "unwrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);
         return "";
     }
@@ -110,9 +107,11 @@ std::string GCHSM::decrypt(const std::string& username, const std::string& paren
     std::string result =  BaseCryptoProcessor::decrypt(parentKeyName,childKey,CryptoKeyAlgoMap[parentKeyName]);
 
     if (!BaseCryptoProcessor::wrapKey("MASTER", parentKeyName, wrapLog[parentKeyName])) {
-        std::cerr << "internalGenerateAndWrap: BaseCryptoProcessor::wrapKey failed." << std::endl;
+        std::cerr << "wrapKey failed." << std::endl;
         ERR_print_errors_fp(stderr);
     }
+
+    std::cout << "Unwrapped Key : " << childKey << " using Key : " << parentKeyName << std::endl;
 
     return result;
 }

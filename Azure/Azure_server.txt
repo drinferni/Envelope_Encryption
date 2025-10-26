@@ -1,0 +1,43 @@
+Generating new master key...
+Saved new master key to "./KeyLocker/master_key.key"
+Loading Wrap information
+Wrap log not found. Will create a new one.
+Policy file not found: ./KeyLocker/user_DEK_permissions.txt. A new file will be created on save.
+AzureHSM initialized. Loaded 0 user policies  << 
+Loagged all the passwords from passwords.tsv
+Loaded all the users
+AzureHSM server listening on port 8443
+Request : {"action":"generateDEK","keyname":"myDEK","password":"alice123","username":"alice"}
+alice alice123
+Authentication :alice
+Hashing password
+Attempting to generate DEK 'myDEK' for user 'alice'...
+Creating Key :myDEK
+Successfully created key: myDEK
+Getting Key :MASTER
+getting Master Key
+Getting Key :myDEK
+Successfully wrapped key 'myDEK' with 'MASTER' using AES-KWP.
+Getting Key :myDEK
+Grant: Adding new user 'alice' to policy.
+Grant: Access for 'alice' to 'myDEK' saved.
+Successfully generated and wrapped DEK 'myDEK', granting access to 'alice'.
+Response : {"status":"ok","message":"DEK generated"}
+Request : {"action":"encryptVolume","device":"/dev/loop0","keyname":"myDEK","password":"alice123","username":"alice"}
+alice alice123
+Authentication :alice
+Hashing password
+Getting Key :myDEK
+WARNING: Device /dev/loop0 already contains a 'ext4' superblock signature.
+Response : {"status":"ok","message":"volume encrypted"}
+Request : {"action":"openVolume","device":"/dev/loop0","keyname":"myDEK","mapping":"secure-disk","password":"alice123","username":"alice"}
+alice alice123
+Authentication :alice
+Hashing password
+Getting Key :myDEK
+Response : {"status":"ok","message":"volume opened"}
+Request : {"action":"closeVolume","mapping":"secure-disk","password":"alice123","username":"alice"}
+alice alice123
+Authentication :alice
+Hashing password
+Response : {"status":"ok","message":"volume closed"}

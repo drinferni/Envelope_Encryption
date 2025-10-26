@@ -1,120 +1,149 @@
 #include <iostream>
 #include <string>
+#include <map>
 #include <sstream>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <openssl/bio.h>
+#include <openssl/pem.h>
 
 // -------------------- Helpers --------------------
-std::string makeJsonRequest(const std::string& username, const std::string& password,
-                            const std::string& action,
-                            const std::string& keyname = "",
-                            const std::string& device = "",
-                            const std::string& mapping = "") {
+std::string makeJsonRequest(const std::map<std::string,std::string>& kv) {
     std::ostringstream oss;
     oss << "{";
-    oss << "\"username\":\"" << username << "\",";
-    oss << "\"password\":\"" << password << "\",";
-    oss << "\"action\":\"" << action << "\"";
-    if (!keyname.empty()) oss << ",\"keyname\":\"" << keyname << "\"";
-    if (!device.empty())  oss << ",\"device\":\"" << device << "\"";
-    if (!mapping.empty()) oss << ",\"mapping\":\"" << mapping << "\"";
+    bool first = true;
+    for (auto &p : kv) {
+        if (!first) oss << ",";
+        oss << "\"" << p.first << "\":\"" << p.second << "\"";
+        first = false;
+    }
     oss << "}";
     return oss.str();
 }
 
-// Read a line from SSL
-std::string ssl_read_line(SSL* ssl) {
-    std::string line;
-    char c;
-    while (SSL_read(ssl, &c, 1) == 1) {
-        if (c == '\n') break;
-        line.push_back(c);
+SSL* ssl_connect(const std::string& host, int port) {
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+
+    SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) {
+        ERR_print_errors_fp(stderr);
+        return nullptr;
     }
-    return line;
+
+    BIO* bio = BIO_new_ssl_connect(ctx);
+    if (!bio) {
+        SSL_CTX_free(ctx);
+        return nullptr;
+    }
+
+    std::string target = host + ":" + std::to_string(port);
+    BIO_set_conn_hostname(bio, target.c_str());
+
+    SSL* ssl = nullptr;
+    BIO_get_ssl(bio, &ssl);
+    SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+
+    if (BIO_do_connect(bio) <= 0) {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctx);
+        return nullptr;
+    }
+    if (SSL_connect(ssl) <= 0) {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctx);
+        return nullptr;
+    }
+
+    // Store ctx pointer in SSL ex_data for cleanup later
+    SSL_set_ex_data(ssl, 0, ctx);
+    return ssl;
+}
+
+void ssl_disconnect(SSL* ssl) {
+    if (!ssl) return;
+    SSL_CTX* ctx = (SSL_CTX*)SSL_get_ex_data(ssl, 0);
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    if (ctx) SSL_CTX_free(ctx);
+}
+
+std::string sendRequest(const std::string& host, int port, const std::map<std::string,std::string>& req) {
+    SSL* ssl = ssl_connect(host, port);
+    if (!ssl) {
+        std::cerr << "SSL connect failed\n";
+        return "";
+    }
+
+    std::string reqStr = makeJsonRequest(req) + "\n";
+    std::cout << "Sending Request: " << reqStr;
+
+    SSL_write(ssl, reqStr.c_str(), reqStr.size());
+
+    char buf[4096];
+    int n = SSL_read(ssl, buf, sizeof(buf) - 1);
+    if (n <= 0) {
+        ssl_disconnect(ssl);
+        return "";
+    }
+    buf[n] = '\0';
+    std::string resp(buf);
+    ssl_disconnect(ssl);
+
+    std::cout << "Response Got: " << resp << std::endl;
+    return resp;
 }
 
 // -------------------- Main --------------------
 int main() {
-    std::string server_ip = "127.0.0.1";
+    std::string host = "127.0.0.1";
     int port = 8443;
-
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
-    SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
-    if (!ctx) {
-        std::cerr << "Failed to create SSL_CTX\n";
-        return 1;
-    }
-
-    SSL* ssl;
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("socket");
-        return 1;
-    }
-
-    sockaddr_in server_addr{};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr);
-
-    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("connect");
-        return 1;
-    }
-
-    ssl = SSL_new(ctx);
-    SSL_set_fd(ssl, sock);
-
-    if (SSL_connect(ssl) <= 0) {
-        ERR_print_errors_fp(stderr);
-        return 1;
-    }
 
     std::string username = "alice";
     std::string password = "alice123";
-
-    // -------------------- Demo: Generate DEK --------------------
-    std::string generateDEKReq = makeJsonRequest(username, password, "generateDEK", "myDEK");
-    SSL_write(ssl, generateDEKReq.c_str(), generateDEKReq.size());
-    SSL_write(ssl, "\n", 1);
-
-    std::string response = ssl_read_line(ssl);
-    std::cout << "Response (generateDEK): " << response << "\n";
-
-    // -------------------- Demo: Encrypt volume --------------------
+    std::string dek = "myDEK";
     std::string device = "/dev/loop0";
-    std::string encryptReq = makeJsonRequest(username, password, "encryptVolume", "myDEK", device);
-    SSL_write(ssl, encryptReq.c_str(), encryptReq.size());
-    SSL_write(ssl, "\n", 1);
-
-    response = ssl_read_line(ssl);
-    std::cout << "Response (encryptVolume): " << response << "\n";
-
-    // -------------------- Demo: Open volume --------------------
     std::string mapping = "secure-disk";
-    std::string openReq = makeJsonRequest(username, password, "openVolume", "myDEK", device, mapping);
-    SSL_write(ssl, openReq.c_str(), openReq.size());
-    SSL_write(ssl, "\n", 1);
 
-    response = ssl_read_line(ssl);
-    std::cout << "Response (openVolume): " << response << "\n";
+    // 1. Generate DEK
+    auto resp1 = sendRequest(host, port, {
+        {"username", username},
+        {"password", password},
+        {"action", "generateDEK"},
+        {"keyname", dek}
+    });
+    std::cout << "generateDEK: " << resp1 << "\n";
 
-    // -------------------- Demo: Close volume --------------------
-    std::string closeReq = makeJsonRequest(username, password, "closeVolume", "", "", mapping);
-    SSL_write(ssl, closeReq.c_str(), closeReq.size());
-    SSL_write(ssl, "\n", 1);
+    // 2. Encrypt Volume
+    auto resp2 = sendRequest(host, port, {
+        {"username", username},
+        {"password", password},
+        {"action", "encryptVolume"},
+        {"keyname", dek},
+        {"device", device}
+    });
+    std::cout << "encryptVolume: " << resp2 << "\n";
 
-    response = ssl_read_line(ssl);
-    std::cout << "Response (closeVolume): " << response << "\n";
+    // 3. Open Volume
+    auto resp3 = sendRequest(host, port, {
+        {"username", username},
+        {"password", password},
+        {"action", "openVolume"},
+        {"keyname", dek},
+        {"device", device},
+        {"mapping", mapping}
+    });
+    std::cout << "openVolume: " << resp3 << "\n";
 
-    SSL_shutdown(ssl);
-    SSL_free(ssl);
-    close(sock);
-    SSL_CTX_free(ctx);
+    // 4. Close Volume
+    auto resp4 = sendRequest(host, port, {
+        {"username", username},
+        {"password", password},
+        {"action", "closeVolume"},
+        {"mapping", mapping}
+    });
+    std::cout << "closeVolume: " << resp4 << "\n";
 
     return 0;
 }

@@ -42,6 +42,7 @@ void AccessController::loadUsers(const std::string& filename) {
             }
         }
     }
+    std::cout << "Loaded all the users" << std::endl;
 }
 
 std::string AccessController::hashPassword(const std::string& password) const {
@@ -78,10 +79,16 @@ std::string AccessController::hashPassword(const std::string& password) const {
     for (unsigned int i = 0; i < hash_len; i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
     }
+
+    std::cout << "Hashing password" << std::endl;
     return ss.str();
+
 }
 
 bool AccessController::authenticate(const std::string& username, const std::string& password) const {
+
+    std::cout << "Authentication :" << username << std::endl;
+
     if (passwordHashes.find(username) == passwordHashes.end()) {
         return false;
     }
